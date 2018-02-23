@@ -2,8 +2,9 @@ import qualified System.Console.ANSI as ANSI
 import           Control.Concurrent
 import           System.IO
 
-move :: (Int, Int) -> [(Int, Int)] -> [(Int, Int)]
-move (dirY, dirX) (x:xs) = init $ (dirY + fst x, dirX + snd x):x:xs
+move :: Maybe (Int, Int) -> [(Int, Int)] -> [(Int, Int)]
+move Nothing xs = xs
+move (Just (dirY, dirX)) (x:xs) = init $ (dirY + fst x, dirX + snd x):x:xs
 
 modStr :: (Int, Int) -> [[Char]] -> [[Char]]
 modStr point str = let (beforeLines, line:afterLines) = splitAt (fst point) str
@@ -14,12 +15,13 @@ modStr point str = let (beforeLines, line:afterLines) = splitAt (fst point) str
 toStr :: [(Int, Int)] -> [[Char]]
 toStr xs = foldl (\acc x -> modStr x acc) (replicate 10 (replicate 20 '.')) xs
 
-charToDir :: Char -> (Int, Int)
+charToDir :: Char -> Maybe (Int, Int)
 charToDir c
-  | c == 'w' = (-1, 0)
-  | c == 'a' = (0, -1)
-  | c == 's' = (1, 0)
-  | c == 'd' = (0, 1)
+  | c == 'w' = Just (-1, 0)
+  | c == 'a' = Just (0, -1)
+  | c == 's' = Just (1, 0)
+  | c == 'd' = Just (0, 1)
+  | otherwise = Nothing
 
 movePlease :: Char -> [(Int, Int)] -> [(Int, Int)]
 movePlease c xs = move (charToDir c) xs
