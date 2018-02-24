@@ -6,7 +6,7 @@ yMax = 10
 xMax = 20
 emptyMap =  replicate yMax $ replicate xMax '.'
 
-data Point = Point Int Int deriving (Show)
+data Point = Point Int Int deriving (Show, Eq)
 
 (Point a b) |+| (Point c d) = Point (a + c) (b + d)
 infixl 6 |+|
@@ -19,7 +19,13 @@ data GameState = GameState {snake :: Maybe [Point], dir :: Maybe Point} deriving
 move :: Maybe Point -> Maybe [Point] -> Maybe [Point]
 move Nothing xs = xs
 move _ Nothing = Nothing
-move (Just dir) (Just (x:xs)) = Just $ init $ (dir |+| x):x:xs
+move (Just dir) (Just (x:xs))
+  | getY newHead < 0 = Nothing
+  | getY newHead >= yMax = Nothing
+  | getX newHead < 0 = Nothing
+  | getX newHead >= xMax = Nothing
+  | otherwise = Just $ init $ newHead:x:xs
+  where newHead = (dir |+| x)
 
 modStr :: Point -> [String] -> [String]
 modStr point str = let (beforeLines, line:afterLines) = splitAt (getY point) str
@@ -66,6 +72,9 @@ main = do
           a <- getChar
           state <- takeMVar c
           ANSI.cursorUp $ yMax + 1
+          putStrLn $ unlines $ replicate yMax $ replicate xMax ' '
+          ANSI.cursorUp $ yMax + 1
           putStrLn $ unlines $ toStr $ movePlease a state
-          putMVar c (movePlease a state)
-          myinput c
+          if snake state == Nothing then
+            return ()
+          else putMVar c (movePlease a state) >> myinput c
