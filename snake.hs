@@ -46,10 +46,23 @@ move :: GameState -> GameState
 move state@(GameState { dir = Nothing }) = state
 move state@(GameState { snake = Nothing }) = state
 move state@(GameState (Just (x:xs)) food (Just dir) _ _)
-  | not $ inRange newHead yMax xMax = state {snake = Nothing}
-  | elem newHead (x:xs) == True = state {snake = Nothing}
-  | newHead == food = placeFood state {snake = Just (newHead:x:xs), lastDir = Just dir}
-  | otherwise = state {snake = Just $ init $ newHead:x:xs, lastDir = Just dir}
+  -- if the head is out of range
+  | not $ inRange newHead yMax xMax = state { snake = Nothing }
+
+  -- if the head has collided with the tail
+  | elem newHead (x:xs) == True = state { snake = Nothing }
+
+  -- if the head is over food
+  | newHead == food = placeFood state {
+    snake = Just (newHead:x:xs),
+    lastDir = Just dir
+  }
+
+  -- regular movement
+  | otherwise = state {
+    snake = Just $ init $ newHead:x:xs,
+    lastDir = Just dir
+  }
   where newHead = dir |+| x
 
 modStr :: Point -> Char -> [String] -> [String]
@@ -95,22 +108,18 @@ getInitialState = do
   where initY = yMax `div` 2
         initX = xMax `div` 2
 
-
 clearScreen = do
   ANSI.cursorUp $ yMax + 1
   putStrLn $ unlines $ replicate yMax $ replicate xMax ' '
   ANSI.cursorUp $ yMax + 1
 
 handleInput c = do
-  a <- getChar
-  state <- takeMVar c
-  dir <- return (toDir a)
-  return (changeDir dir state) >>= putMVar c
+  dir <- toDir <$> getChar
+  changeDir dir <$> takeMVar c >>= putMVar c
   handleInput c
 
 gameTick c = do
-  state <- takeMVar c
-  newState <- return (move state)
+  newState <- move <$> takeMVar c
   clearScreen
   putStrLn $ toStr newState
   if snake newState == Nothing then
