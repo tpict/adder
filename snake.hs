@@ -8,55 +8,72 @@ xMax = 20
 initialLength = 3
 emptyMap =  replicate yMax $ replicate xMax '.'
 
-data Point = Point Int Int deriving (Show, Eq)
+data Point = Point { getY :: Int, getX :: Int } deriving (Show, Eq)
 
 (Point a b) |+| (Point c d) = Point (a + c) (b + d)
 infixl 6 |+|
 
-getY (Point a b) = a
-getX (Point a b) = b
+inRange :: Point -> Int -> Int -> Bool
+inRange point my mx = and [
+  getY point < my,
+  getY point >= 0,
+  getX point < mx,
+  getX point >= 0
+  ]
 
-data GameState = GameState {snake :: Maybe [Point], dir :: Maybe Point} deriving (Show)
+data GameState = GameState {
+  snake :: Maybe [Point],
+  food :: Point,
+  dir :: Maybe Point
+} deriving (Show)
 
-move :: Maybe Point -> Maybe [Point] -> Maybe [Point]
-move Nothing xs = xs
-move _ Nothing = Nothing
-move (Just dir) (Just (x:xs))
-  | getY newHead < 0 = Nothing
-  | getY newHead >= yMax = Nothing
-  | getX newHead < 0 = Nothing
-  | getX newHead >= xMax = Nothing
-  | elem newHead (x:xs) == True = Nothing
-  | otherwise = Just $ init $ newHead:x:xs
+move :: GameState -> GameState
+move state@(GameState _ _ Nothing) = state
+move state@(GameState Nothing _ _) = state
+move (GameState (Just (x:xs)) food (Just dir)) =
+  let newSnake | not $ inRange newHead yMax xMax = Nothing
+               | elem newHead (x:xs) == True = Nothing
+               | otherwise = Just $ init $ newHead:x:xs
+  in GameState newSnake food (Just dir)
   where newHead = (dir |+| x)
 
-modStr :: Point -> [String] -> [String]
-modStr point str = let (beforeLines, line:afterLines) = splitAt (getY point) str
-                       (beforeChars, _:afterChars) = splitAt (getX point) line
-                       newLine = beforeChars ++ ['x'] ++ afterChars
+modStr :: Point -> Char -> [String] -> [String]
+modStr point c str = let (beforeLines, line:afterLines) = splitAt (getY point) str
+                         (beforeChars, _:afterChars) = splitAt (getX point) line
+                         newLine = beforeChars ++ [c] ++ afterChars
   in beforeLines ++ [newLine] ++ afterLines
 
-toStr :: GameState -> String
-toStr (GameState Nothing _) = "Game over!"
-toStr state@(GameState (Just snake) _) = unlines . foldl (\acc x -> modStr x acc) emptyMap $ snake
+addSnake :: [Point] -> [String] -> [String]
+addSnake snake map = foldl (\acc x -> modStr x 's' acc) map $ snake
 
-charToDir :: Char -> Maybe Point
-charToDir c
+addFood :: Point -> [String] -> [String]
+addFood food map = modStr food 'O' map
+
+toStr :: GameState -> String
+toStr (GameState Nothing _ _) = "Game over!"
+toStr state@(GameState (Just snake) food _) = unlines $ addSnake snake $ addFood food emptyMap
+
+toDir :: Char -> Maybe Point
+toDir c
   | c == 'w' = Just (Point (-1) 0)
   | c == 'a' = Just (Point 0 (-1))
   | c == 's' = Just (Point 1 0)
   | c == 'd' = Just (Point 0 1)
   | otherwise = Nothing
 
-movePlease :: Char -> GameState -> GameState
-movePlease c state = let newDir = charToDir c
-  in GameState {
-    snake = move newDir $ snake state,
+changeDir :: Maybe Point -> GameState -> GameState
+changeDir Nothing state = state
+changeDir newDir state
+  | ((|+|) <$> newDir <*> (dir state)) == Just (Point 0 0) = state
+  | otherwise = GameState {
+    snake = snake state,
+    food = food state,
     dir = newDir
   }
 
 snakey = GameState {
   snake = Just [Point 0 x | x <- reverse [0..initialLength - 1]],
+  food = Point 5 10,
   dir = Nothing
 }
 
@@ -66,10 +83,10 @@ clearScreen = do
   ANSI.cursorUp $ yMax + 1
 
 main = do
-  c <- newEmptyMVar
-  putMVar c snakey
   hSetBuffering stdin NoBuffering
   hSetEcho stdin False
+  c <- newEmptyMVar
+  putMVar c snakey
   putStrLn $ toStr snakey
   forkIO $ wait c
   myinput c
@@ -79,9 +96,11 @@ main = do
         myinput c = do
           a <- getChar
           state <- takeMVar c
-          newState <- return (movePlease a state)
+          dir <- return (toDir a)
+          newState <- return (changeDir dir state)
+          anotherNewState <- return (move newState)
           clearScreen
-          putStrLn $ toStr newState
-          if snake newState == Nothing then
+          putStrLn $ toStr anotherNewState
+          if snake anotherNewState == Nothing then
             exitSuccess
-          else putMVar c newState >> myinput c
+          else putMVar c anotherNewState >> myinput c
