@@ -83,10 +83,10 @@ toStr (GameState (Just snake) food _ _ _) = unlines $ addSnake snake $ addFood f
 
 toDir :: Char -> Maybe Point
 toDir c
-  | c == 'w' = Just (Point (-1) 0)
-  | c == 'a' = Just (Point 0 (-1))
-  | c == 's' = Just (Point 1 0)
-  | c == 'd' = Just (Point 0 1)
+  | c == 'w' = Just $ Point (-1) 0
+  | c == 'a' = Just $ Point 0 (-1)
+  | c == 's' = Just $ Point 1 0
+  | c == 'd' = Just $ Point 0 1
   | otherwise = Nothing
 
 changeDir :: Maybe Point -> GameState -> GameState
