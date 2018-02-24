@@ -30,11 +30,11 @@ data GameState = GameState {
 move :: GameState -> GameState
 move state@(GameState _ _ Nothing) = state
 move state@(GameState Nothing _ _) = state
-move (GameState (Just (x:xs)) food (Just dir)) =
-  let newSnake | not $ inRange newHead yMax xMax = Nothing
-               | elem newHead (x:xs) == True = Nothing
-               | otherwise = Just $ init $ newHead:x:xs
-  in GameState newSnake food (Just dir)
+move state@(GameState (Just (x:xs)) food (Just dir))
+  | not $ inRange newHead yMax xMax = state {snake = Nothing}
+  | elem newHead (x:xs) == True = state {snake = Nothing}
+  | newHead == food = state {snake = Just (newHead:x:xs), food = Point 0 0}
+  | otherwise = state {snake = Just $ init $ newHead:x:xs}
   where newHead = (dir |+| x)
 
 modStr :: Point -> Char -> [String] -> [String]
