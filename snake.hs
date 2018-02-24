@@ -1,8 +1,9 @@
-import qualified System.Console.ANSI as ANSI
 import           Control.Concurrent
+import           Data.Maybe
+import qualified System.Console.ANSI as ANSI
+import           System.Exit
 import           System.IO
-import System.Exit
-import System.Random
+import           System.Random
 
 yMax = 10
 xMax = 20
@@ -23,17 +24,21 @@ inRange point my mx = and [
   ]
 
 data GameState = GameState {
-  snake :: Maybe [Point],
-  food :: Point,
-  dir :: Maybe Point,
+  snake   :: Maybe [Point],
+  food    :: Point,
+  dir     :: Maybe Point,
   randGen :: StdGen
 } deriving (Show)
 
 placeFood :: GameState -> GameState
-placeFood state = let gen = randGen state
-                      (y, newGen) = randomR (0, yMax - 1) gen
-                      (x, lastGen) = randomR (0, xMax - 1) newGen
-  in state { food = Point y x, randGen = lastGen }
+placeFood state
+    | inSnake = placeFood state { randGen = lastGen }
+    | otherwise = state { food = Point y x, randGen = lastGen }
+    where gen = randGen state
+          (y, newGen) = randomR (0, yMax - 1) gen
+          (x, lastGen) = randomR (0, xMax - 1) newGen
+          p = Point y x
+          inSnake = fromMaybe False $ (elem p) <$> snake state
 
 move :: GameState -> GameState
 move state@(GameState { dir = Nothing }) = state
@@ -52,7 +57,7 @@ modStr point c str = let (beforeLines, line:afterLines) = splitAt (getY point) s
   in beforeLines ++ [newLine] ++ afterLines
 
 addSnake :: [Point] -> [String] -> [String]
-addSnake snake map = foldl (\acc x -> modStr x 's' acc) map $ snake
+addSnake (x:xs) map = modStr x 'S' $ foldl (\acc y -> modStr y 's' acc) map xs
 
 addFood :: Point -> [String] -> [String]
 addFood food map = modStr food 'O' map
