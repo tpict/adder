@@ -1,9 +1,11 @@
 import qualified System.Console.ANSI as ANSI
 import           Control.Concurrent
 import           System.IO
+import System.Exit
 
 yMax = 10
 xMax = 20
+initialLength = 3
 emptyMap =  replicate yMax $ replicate xMax '.'
 
 data Point = Point Int Int deriving (Show, Eq)
@@ -24,6 +26,7 @@ move (Just dir) (Just (x:xs))
   | getY newHead >= yMax = Nothing
   | getX newHead < 0 = Nothing
   | getX newHead >= xMax = Nothing
+  | elem newHead (x:xs) == True = Nothing
   | otherwise = Just $ init $ newHead:x:xs
   where newHead = (dir |+| x)
 
@@ -33,9 +36,9 @@ modStr point str = let (beforeLines, line:afterLines) = splitAt (getY point) str
                        newLine = beforeChars ++ ['x'] ++ afterChars
   in beforeLines ++ [newLine] ++ afterLines
 
-toStr :: GameState -> [String]
-toStr (GameState Nothing _) = ["Game over!"]
-toStr state@(GameState (Just snake) _) = foldl (\acc x -> modStr x acc) emptyMap $ snake
+toStr :: GameState -> String
+toStr (GameState Nothing _) = "Game over!"
+toStr state@(GameState (Just snake) _) = unlines . foldl (\acc x -> modStr x acc) emptyMap $ snake
 
 charToDir :: Char -> Maybe Point
 charToDir c
@@ -53,28 +56,32 @@ movePlease c state = let newDir = charToDir c
   }
 
 snakey = GameState {
-  snake = Just [Point 0 x | x <- reverse [0..2]],
+  snake = Just [Point 0 x | x <- reverse [0..initialLength - 1]],
   dir = Nothing
 }
+
+clearScreen = do
+  ANSI.cursorUp $ yMax + 1
+  putStrLn $ unlines $ replicate yMax $ replicate xMax ' '
+  ANSI.cursorUp $ yMax + 1
 
 main = do
   c <- newEmptyMVar
   putMVar c snakey
   hSetBuffering stdin NoBuffering
   hSetEcho stdin False
-  putStrLn $ unlines $ toStr snakey
-  forkIO $ myinput c
-  wait c
+  putStrLn $ toStr snakey
+  forkIO $ wait c
+  myinput c
   where wait c = do
           -- auto move goes here
           threadDelay 1000000 >> wait c
         myinput c = do
           a <- getChar
           state <- takeMVar c
-          ANSI.cursorUp $ yMax + 1
-          putStrLn $ unlines $ replicate yMax $ replicate xMax ' '
-          ANSI.cursorUp $ yMax + 1
-          putStrLn $ unlines $ toStr $ movePlease a state
-          if snake state == Nothing then
-            return ()
-          else putMVar c (movePlease a state) >> myinput c
+          newState <- return (movePlease a state)
+          clearScreen
+          putStrLn $ toStr newState
+          if snake newState == Nothing then
+            exitSuccess
+          else putMVar c newState >> myinput c
