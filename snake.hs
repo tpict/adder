@@ -5,9 +5,10 @@ import           System.Exit
 import           System.IO
 import           System.Random
 
+tickDur = 200000
 yMax = 10
 xMax = 20
-initialLength = 3
+initLen = 3
 emptyMap =  replicate yMax $ replicate xMax '.'
 
 data Point = Point { getY :: Int, getX :: Int } deriving (Show, Eq)
@@ -27,6 +28,7 @@ data GameState = GameState {
   snake   :: Maybe [Point],
   food    :: Point,
   dir     :: Maybe Point,
+  lastDir :: Maybe Point,
   randGen :: StdGen
 } deriving (Show)
 
@@ -43,11 +45,11 @@ placeFood state
 move :: GameState -> GameState
 move state@(GameState { dir = Nothing }) = state
 move state@(GameState { snake = Nothing }) = state
-move state@(GameState (Just (x:xs)) food (Just dir) _)
+move state@(GameState (Just (x:xs)) food (Just dir) _ _)
   | not $ inRange newHead yMax xMax = state {snake = Nothing}
   | elem newHead (x:xs) == True = state {snake = Nothing}
-  | newHead == food = placeFood state {snake = Just (newHead:x:xs)}
-  | otherwise = state {snake = Just $ init $ newHead:x:xs}
+  | newHead == food = placeFood state {snake = Just (newHead:x:xs), lastDir = Just dir}
+  | otherwise = state {snake = Just $ init $ newHead:x:xs, lastDir = Just dir}
   where newHead = dir |+| x
 
 modStr :: Point -> Char -> [String] -> [String]
@@ -64,7 +66,7 @@ addFood food map = modStr food 'O' map
 
 toStr :: GameState -> String
 toStr (GameState { snake = Nothing }) = "Game over!"
-toStr state@(GameState (Just snake) food _ _) = unlines $ addSnake snake $ addFood food emptyMap
+toStr (GameState (Just snake) food _ _ _) = unlines $ addSnake snake $ addFood food emptyMap
 
 toDir :: Char -> Maybe Point
 toDir c
@@ -77,44 +79,50 @@ toDir c
 changeDir :: Maybe Point -> GameState -> GameState
 changeDir Nothing state = state
 changeDir newDir state
-  | ((|+|) <$> newDir <*> (dir state)) == Just (Point 0 0) = state
+  | ((|+|) <$> newDir <*> (lastDir state)) == Just (Point 0 0) = state
   | otherwise = state { dir = newDir }
 
-getSnakey = do
-  gen <- getStdGen
-  state <- return GameState {
-    snake = Just [Point 0 x | x <- reverse [0..initialLength - 1]],
-    food = Point 0 0,
-    dir = Nothing,
-    randGen = gen
-  }
-  return $ placeFood state
+getInitialState = do
+    gen <- getStdGen
+    state <- return GameState {
+      snake = Just [Point initY x | x <- reverse [initX - initLen + 1..initX]],
+      food = Point 0 0,
+      dir = Nothing,
+      lastDir = Nothing,
+      randGen = gen
+    }
+    return $ placeFood state
+  where initY = yMax `div` 2
+        initX = xMax `div` 2
+
 
 clearScreen = do
   ANSI.cursorUp $ yMax + 1
   putStrLn $ unlines $ replicate yMax $ replicate xMax ' '
   ANSI.cursorUp $ yMax + 1
 
+handleInput c = do
+  a <- getChar
+  state <- takeMVar c
+  dir <- return (toDir a)
+  return (changeDir dir state) >>= putMVar c
+  handleInput c
+
+gameTick c = do
+  state <- takeMVar c
+  newState <- return (move state)
+  clearScreen
+  putStrLn $ toStr newState
+  if snake newState == Nothing then
+    exitSuccess
+  else putMVar c newState >> threadDelay tickDur >> gameTick c
+
 main = do
   hSetBuffering stdin NoBuffering
   hSetEcho stdin False
   c <- newEmptyMVar
-  snakey <- getSnakey
-  putMVar c snakey
-  putStrLn $ toStr snakey
-  forkIO $ wait c
-  myinput c
-  where wait c = do
-          -- auto move goes here
-          threadDelay 1000000 >> wait c
-        myinput c = do
-          a <- getChar
-          state <- takeMVar c
-          dir <- return (toDir a)
-          newState <- return (changeDir dir state)
-          anotherNewState <- return (move newState)
-          clearScreen
-          putStrLn $ toStr anotherNewState
-          if snake anotherNewState == Nothing then
-            exitSuccess
-          else putMVar c anotherNewState >> myinput c
+  state <- getInitialState
+  putMVar c state
+  putStrLn $ toStr state
+  forkIO $ handleInput c
+  gameTick c
