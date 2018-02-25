@@ -6,9 +6,9 @@ import Html.Events exposing (on, keyCode, onInput)
 import Json.Encode exposing (string)
 import Json.Decode as Decode
 import Json.Encode as Encode
-import List exposing (all, drop, foldl, map, member, range, repeat)
+import List exposing (all, drop, foldl, length, map, maximum, member, range, repeat)
 import List.Extra exposing (init, splitAt)
-import Maybe exposing (Maybe, map2)
+import Maybe exposing (Maybe, map2, withDefault)
 import String exposing (fromList, join, toList)
 import NativeModule exposing (randomInt)
 import Task
@@ -35,6 +35,18 @@ type Point = Point Int Int
 add : Point -> Point -> Point
 add (Point y1 x1) (Point y2 x2) = Point (y1 + y2) (x1 + x2)
 
+up : Point
+up = Point -1 0
+
+down : Point
+down = Point 1 0
+
+left : Point
+left = Point 0 -1
+
+right : Point
+right = Point 0 1
+
 inRange : Point -> Int -> Int -> Bool
 inRange (Point y x) my mx =
   y < my
@@ -43,6 +55,28 @@ inRange (Point y x) my mx =
   && x >= 0
 
 type GameState = GameState (List Point) Point (Maybe Point) (Maybe Point)
+
+initState : GameState
+initState =
+  let initY = yMax // 2
+      initX = xMax // 2
+      initHead = initX - initLen + 1
+      snake = map (\x -> Point initY x) <| range initHead initX
+  in placeFood <| GameState snake (Point 0 0) Nothing (Just (Point 0 -1))
+
+reset : GameState -> GameState
+reset (GameState snake _ _ _ as state) = case snake of
+  [] -> initState
+  _ -> state
+
+changeDir : Maybe Point -> GameState -> GameState
+changeDir newDir (GameState snake food dir lastDir as state) = case newDir of
+  Nothing -> state
+  _ ->
+    if map2 add newDir lastDir == Just (Point 0 0) then
+      state
+    else
+      GameState snake food newDir lastDir
 
 placeFood : GameState -> GameState
 placeFood ((GameState snake food dir lastDir) as state) =
@@ -99,9 +133,17 @@ addSnake snake map = case snake of
 addFood : Point -> List String -> List String
 addFood food map = modStr food 'O' map
 
+centreText : List String -> String
+centreText lines =
+  let yTopPadAmount = (yMax - length lines) // 2
+      yBottomPadAmount = yMax - yTopPadAmount
+      yTopPad = join "" <| repeat yTopPadAmount "<br>"
+      yBottomPad = join "" <| repeat yBottomPadAmount "<br>"
+  in yTopPad ++ join "<br>" lines ++ yBottomPad
+
 toStr : GameState -> String
 toStr (GameState snake food _ _) = case snake of
-  [] -> "Game over!"
+  [] -> centreText ["Game over!", "r to restart"]
   _ -> join "<br>" (addSnake snake (addFood food emptyMap))
 
 
@@ -128,7 +170,7 @@ update msg model =
       (model, Cmd.none)
 
     KeyDown key ->
-      ({ model | state = changeDir (toDir key) model.state }, Cmd.none)
+      ({ model | state = handleInput key model.state }, Cmd.none)
 
     Move ->
       ({ model | state = move model.state }, loop)
@@ -140,13 +182,6 @@ tabindex =
 view : Model -> Html Msg
 view model =
   div [ monoStyle, tabindex, onKeyDown KeyDown ] [ textHtml <| toStr model.state ]
-
-initState : GameState
-initState = let initY = yMax // 2
-                initX = xMax // 2
-                initHead = initX - initLen + 1
-                snake = map (\x -> Point initY x) <| range initHead initX
-      in placeFood <| GameState snake (Point 0 0) Nothing (Just (Point 0 -1))
 
 loop : Cmd Msg
 loop =
@@ -171,19 +206,15 @@ onKeyDown : (Int -> msg) -> Attribute msg
 onKeyDown tagger =
   on "keydown" (Decode.map tagger keyCode)
 
-toDir : Int -> Maybe Point
-toDir c = case c of
-  87 -> Just (Point (-1) 0)
-  65 -> Just (Point 0 (-1))
-  83 -> Just (Point 1 0)
-  68 -> Just (Point 0 1)
-  _ -> Nothing
-
-changeDir : Maybe Point -> GameState -> GameState
-changeDir newDir ((GameState snake food dir lastDir) as state) = case newDir of
-  Nothing -> state
-  _ ->
-    if map2 add newDir lastDir == Just (Point 0 0) then
-      state
-    else
-      GameState snake food newDir lastDir
+handleInput : Int -> GameState -> GameState
+handleInput c = case c of
+  38 -> changeDir <| Just up -- up arrow
+  87 -> changeDir <| Just up -- w key
+  37 -> changeDir <| Just left -- left arrow
+  65 -> changeDir <| Just left -- a key
+  40 -> changeDir <| Just down -- down arrow
+  83 -> changeDir <| Just down -- s key
+  39 -> changeDir <| Just right -- right arrow
+  68 -> changeDir <| Just right -- d key
+  82 -> reset -- r key
+  _ -> identity
