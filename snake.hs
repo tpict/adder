@@ -77,9 +77,9 @@ addSnake (x:xs) map = modStr x 'S' $ foldl (\acc y -> modStr y 's' acc) map xs
 addFood :: Point -> [String] -> [String]
 addFood food map = modStr food 'O' map
 
-toStr :: GameState -> String
-toStr (GameState { snake = Nothing }) = "Game over!"
-toStr (GameState (Just snake) food _ _ _) = unlines $ addSnake snake $ addFood food emptyMap
+toStr :: GameState -> [String]
+toStr (GameState { snake = Nothing }) = ["Game over!" ++ replicate xMax ' ']
+toStr (GameState (Just snake) food _ _ _) = addSnake snake $ addFood food emptyMap
 
 toDir :: Char -> Maybe Point
 toDir c
@@ -108,6 +108,11 @@ getInitialState = do
   where initY = yMax `div` 2
         initX = xMax `div` 2
 
+diffMap :: [String] -> [String] -> [[Maybe Char]]
+diffMap old new = map (\x -> [if e /= f then Just f else Nothing | (e, f) <- x]) b
+  where a = zip old new
+        b = [zip c d | (c, d) <- a]
+
 clearScreen = do
   ANSI.cursorUp $ yMax + 1
   putStrLn $ unlines $ replicate yMax $ replicate xMax ' '
@@ -119,9 +124,12 @@ handleInput c = do
   handleInput c
 
 gameTick c = do
-  newState <- move <$> takeMVar c
-  clearScreen
-  putStrLn $ toStr newState
+  state <- takeMVar c
+  newState <- return (move state)
+
+  ANSI.cursorUpLine $ yMax
+  mapM_ (\y -> (mapM_ (\x -> if x == Nothing then ANSI.cursorForward 1 else putStr [fromJust x]) y) >> ANSI.cursorDownLine 1) $ diffMap (toStr state) (toStr newState)
+
   if snake newState == Nothing then
     exitSuccess
   else putMVar c newState >> threadDelay tickDur >> gameTick c
@@ -132,6 +140,7 @@ main = do
   c <- newEmptyMVar
   state <- getInitialState
   putMVar c state
-  putStrLn $ toStr state
+  putStrLn $ unlines $ toStr state
+  ANSI.cursorUp 1 -- why?
   forkIO $ handleInput c
   gameTick c
