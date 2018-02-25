@@ -25,7 +25,7 @@ inRange point my mx = and [
   ]
 
 data GameState = GameState {
-  snake   :: Maybe [Point],
+  snake   :: [Point],
   food    :: Point,
   dir     :: Maybe Point,
   lastDir :: Maybe Point,
@@ -40,27 +40,27 @@ placeFood state
           (y, newGen) = randomR (0, yMax - 1) gen
           (x, lastGen) = randomR (0, xMax - 1) newGen
           p = Point y x
-          inSnake = fromMaybe False $ (elem p) <$> snake state
+          inSnake = elem p $ snake state
 
 move :: GameState -> GameState
 move state@(GameState { dir = Nothing }) = state
-move state@(GameState { snake = Nothing }) = state
-move state@(GameState (Just (x:xs)) food (Just dir) _ _)
+move state@(GameState { snake = [] }) = state
+move state@(GameState (x:xs) food (Just dir) _ _)
   -- if the head is out of range
-  | not $ inRange newHead yMax xMax = state { snake = Nothing }
+  | not $ inRange newHead yMax xMax = state { snake = [] }
 
   -- if the head has collided with the tail
-  | elem newHead (x:xs) == True = state { snake = Nothing }
+  | elem newHead (x:xs) == True = state { snake = [] }
 
   -- if the head is over food
   | newHead == food = placeFood state {
-    snake = Just (newHead:x:xs),
+    snake = newHead:x:xs,
     lastDir = Just dir
   }
 
   -- regular movement
   | otherwise = state {
-    snake = Just $ init $ newHead:x:xs,
+    snake = init $ newHead:x:xs,
     lastDir = Just dir
   }
   where newHead = dir |+| x
@@ -78,8 +78,8 @@ addFood :: Point -> [String] -> [String]
 addFood food map = modStr food 'O' map
 
 toStr :: GameState -> String
-toStr (GameState { snake = Nothing }) = "Game over!"
-toStr (GameState (Just snake) food _ _ _) = unlines $ addSnake snake $ addFood food emptyMap
+toStr (GameState { snake = [] }) = "Game over!"
+toStr (GameState snake food _ _ _) = unlines $ addSnake snake $ addFood food emptyMap
 
 toDir :: Char -> Maybe Point
 toDir c
@@ -98,7 +98,7 @@ changeDir newDir state
 getInitialState = do
     gen <- getStdGen
     state <- return GameState {
-      snake = Just [Point initY x | x <- reverse [initX - initLen + 1..initX]],
+      snake = [Point initY x | x <- reverse [initX - initLen + 1..initX]],
       food = Point 0 0,
       dir = Nothing,
       lastDir = Just (Point 0 1),
@@ -122,7 +122,7 @@ gameTick c = do
   newState <- move <$> takeMVar c
   clearScreen
   putStrLn $ toStr newState
-  if snake newState == Nothing then
+  if snake newState == [] then
     exitSuccess
   else putMVar c newState >> threadDelay tickDur >> gameTick c
 
