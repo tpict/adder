@@ -2,7 +2,7 @@ module Snake exposing (..)
 
 import Debug exposing (log)
 import Html exposing (Attribute, Html, beginnerProgram, div, input, text)
-import Html.Attributes exposing (attribute, property)
+import Html.Attributes exposing (attribute, property, style)
 import Html.Events exposing (on, keyCode, onInput)
 import Json.Encode exposing (string)
 import Json.Decode as Decode
@@ -23,10 +23,10 @@ import NativeModule exposing (randomInt)
 
 -- tickDur = 200000
 yMax : Int
-yMax = 10
+yMax = 8
 
 xMax : Int
-xMax = 20
+xMax = 12
 
 initLen : Int
 initLen = 3
@@ -145,7 +145,7 @@ tabindex =
 
 view : Model -> Html Msg
 view model =
-  div [ tabindex, onKeyDown KeyDown ] [ textHtml <| toStr model.state ]
+  div [ monoStyle, tabindex, onKeyDown KeyDown ] [ textHtml <| toStr model.state ]
 
 initState : GameState
 initState = let initY = yMax // 2
@@ -160,6 +160,12 @@ main =
   , view = view
   , update = update
   }
+
+monoStyle : Attribute Msg
+monoStyle = style [
+  ("font-family", "monospace"),
+  ("font-size", "48px")
+  ]
 
 onKeyDown : (Int -> msg) -> Attribute msg
 onKeyDown tagger =
