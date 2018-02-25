@@ -1,4 +1,4 @@
-module Hello exposing (..)
+module Snake exposing (..)
 
 import Debug exposing (log)
 import Html exposing (Attribute, Html, beginnerProgram, div, input, text)
@@ -11,6 +11,7 @@ import List exposing (all, drop, foldl, map, member, range, repeat)
 import List.Extra exposing (init, splitAt)
 import Maybe exposing (Maybe, map2)
 import String exposing (fromList, join, toList)
+import NativeModule exposing (randomInt)
 
 
 -- import           Control.Concurrent
@@ -51,21 +52,16 @@ inRange (Point y x) my mx =
   && x >= 0
 
 type GameState = GameState (List Point) Point (Maybe Point) (Maybe Point)
-  -- food    : Point,
-  -- dir     : Maybe Point,
-  -- lastDir : Maybe Point
-  -- randGen : StdGen
--- }
 
--- placeFood :: GameState -> GameState
--- placeFood state
---     | inSnake = placeFood state { randGen = lastGen }
---     | otherwise = state { food = Point y x, randGen = lastGen }
---     where gen = randGen state
---           (y, newGen) = randomR (0, yMax - 1) gen
---           (x, lastGen) = randomR (0, xMax - 1) newGen
---           p = Point y x
---           inSnake = fromMaybe False $ (elem p) <$> snake state
+placeFood : GameState -> GameState
+placeFood ((GameState snake food dir lastDir) as state) =
+  let y = randomInt 0 (yMax - 1)
+      x = randomInt 0 (xMax - 1)
+      p = Point y x
+      inSnake = member p snake
+  in
+      if inSnake then placeFood state
+      else GameState snake p dir lastDir
 
 move : GameState -> GameState
 move state = case state of
@@ -80,7 +76,7 @@ move state = case state of
         else if member newHead (x::xs) then
           GameState [] food (Just dir) oldDir
         else if newHead == food then
-          GameState (newHead::x::xs) food (Just dir) (Just dir)
+          placeFood <| GameState (newHead::x::xs) food (Just dir) (Just dir)
         else
           case newSnake of
             Nothing ->
@@ -105,7 +101,6 @@ modStr (Point y x) c str =
  in beforeLines ++ [newLine] ++ afterLines
 
 addSnake : List Point -> List String -> List String
--- addSnake (x::xs) map = modStr x 'S' (foldl (\acc y -> modStr y 's' acc) map xs)
 addSnake snake map = case snake of
   [] -> map
   x::xs -> modStr x 'S' (foldl (\y acc -> modStr y 's' acc) map xs)
