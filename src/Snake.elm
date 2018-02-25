@@ -152,7 +152,7 @@ initState = let initY = yMax // 2
                 initX = xMax // 2
                 initHead = initX - initLen + 1
                 snake = map (\x -> Point initY x) <| range initHead initX
-      in GameState snake (Point 0 0) Nothing (Just (Point 0 -1))
+      in placeFood <| GameState snake (Point 0 0) Nothing (Just (Point 0 -1))
 
 main =
   beginnerProgram
