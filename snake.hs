@@ -101,7 +101,7 @@ getInitialState = do
       snake = Just [Point initY x | x <- reverse [initX - initLen + 1..initX]],
       food = Point 0 0,
       dir = Nothing,
-      lastDir = Nothing,
+      lastDir = Just (Point 0 1),
       randGen = gen
     }
     return $ placeFood state
