@@ -1,7 +1,6 @@
 module Snake exposing (..)
 
-import Debug exposing (log)
-import Html exposing (Attribute, Html, beginnerProgram, div, input, text)
+import Html exposing (Attribute, Html, program, div, input, text)
 import Html.Attributes exposing (attribute, property, style)
 import Html.Events exposing (on, keyCode, onInput)
 import Json.Encode exposing (string)
@@ -12,16 +11,13 @@ import List.Extra exposing (init, splitAt)
 import Maybe exposing (Maybe, map2)
 import String exposing (fromList, join, toList)
 import NativeModule exposing (randomInt)
+import Task
+import Process
+import Time exposing (second)
 
+tickDur : Float
+tickDur = second * 0.25
 
--- import           Control.Concurrent
--- import           Data.Maybe
--- import qualified System.Console.ANSI as ANSI
--- import           System.Exit
--- import           System.IO
--- import           System.Random
-
--- tickDur = 200000
 yMax : Int
 yMax = 8
 
@@ -38,11 +34,6 @@ type Point = Point Int Int
 
 add : Point -> Point -> Point
 add (Point y1 x1) (Point y2 x2) = Point (y1 + y2) (x1 + x2)
--- add (Point {a, c}) (Point {b, d})
---   = Point (a + c) (b + d)
-
--- (Point a b) |+| (Point c d) = Point (a + c) (b + d)
--- infixl 6 |+|
 
 inRange : Point -> Int -> Int -> Bool
 inRange (Point y x) my mx =
@@ -127,17 +118,20 @@ type alias Model = { state : GameState  }
 type Msg
   = NoOp
   | KeyDown Int
+  | Move
 
-update: Msg -> Model -> Model
+update: Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
 
     NoOp ->
-      model
+      (model, Cmd.none)
 
     KeyDown key ->
-      let newState = changeDir (toDir key) model.state
-      in { model | state = move newState }
+      ({ model | state = changeDir (toDir key) model.state }, Cmd.none)
+
+    Move ->
+      ({ model | state = move model.state }, loop)
 
 tabindex : Attribute msg
 tabindex =
@@ -154,11 +148,17 @@ initState = let initY = yMax // 2
                 snake = map (\x -> Point initY x) <| range initHead initX
       in placeFood <| GameState snake (Point 0 0) Nothing (Just (Point 0 -1))
 
+loop : Cmd Msg
+loop =
+    Process.sleep tickDur |> Task.perform (\_ -> Move)
+
+main : Program Never Model Msg
 main =
-  beginnerProgram
-  { model = { state = initState }
+  program
+  { init = ({ state = initState }, loop)
   , view = view
   , update = update
+  , subscriptions = (\_ -> Sub.none)
   }
 
 monoStyle : Attribute Msg
