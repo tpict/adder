@@ -28,8 +28,12 @@ emptyMap =
     repeat yMax (fromList (repeat xMax '.'))
 
 
-type GameState
-    = GameState (List Point) Point (Maybe Point) (Maybe Point)
+type alias GameState =
+    { snake : List Point
+    , food : Point
+    , dir : Maybe Point
+    , lastDir : Maybe Point
+    }
 
 
 initState : GameState
@@ -51,8 +55,8 @@ initState =
 
 
 reset : GameState -> GameState
-reset ((GameState snake _ _ _) as state) =
-    case snake of
+reset state =
+    case state.snake of
         [] ->
             initState
 
@@ -61,20 +65,20 @@ reset ((GameState snake _ _ _) as state) =
 
 
 changeDir : Maybe Point -> GameState -> GameState
-changeDir newDir ((GameState snake food dir lastDir) as state) =
+changeDir newDir state =
     case newDir of
         Nothing ->
             state
 
         _ ->
-            if map2 add newDir lastDir == Just (Point 0 0) then
+            if map2 add newDir state.lastDir == Just (Point 0 0) then
                 state
             else
-                GameState snake food newDir lastDir
+                { state | dir = newDir }
 
 
 placeFood : GameState -> GameState
-placeFood ((GameState snake food dir lastDir) as state) =
+placeFood state =
     let
         y =
             randomInt 0 (yMax - 1)
@@ -86,24 +90,24 @@ placeFood ((GameState snake food dir lastDir) as state) =
             Point y x
 
         inSnake =
-            member p snake
+            member p state.snake
     in
         if inSnake then
             placeFood state
         else
-            GameState snake p dir lastDir
+            { state | food = p }
 
 
 move : GameState -> GameState
-move state =
-    case state of
-        GameState _ _ Nothing _ ->
+move ({ snake, food, dir, lastDir } as state) =
+    case ( snake, food, dir, lastDir ) of
+        ( _, _, Nothing, _ ) ->
             state
 
-        GameState [] _ _ _ ->
+        ( [], _, _, _ ) ->
             state
 
-        GameState (x :: xs) food (Just dir) oldDir ->
+        ( x :: xs, food, Just dir, lastDir ) ->
             let
                 newHead =
                     add dir x
@@ -113,13 +117,17 @@ move state =
             in
                 if not (inRange newHead yMax xMax) then
                     -- collided with wall
-                    GameState [] food (Just dir) oldDir
+                    { state | snake = [] }
                 else if member newHead (x :: xs) then
                     -- collided with self
-                    GameState [] food (Just dir) oldDir
+                    { state | snake = [] }
                 else if newHead == food then
                     -- eating food
-                    placeFood <| GameState (newHead :: x :: xs) food (Just dir) (Just dir)
+                    placeFood <|
+                        { state
+                            | snake = newHead :: x :: xs
+                            , lastDir = Just dir
+                        }
                 else
                     -- regular movement
                     case newSnake of
@@ -127,7 +135,7 @@ move state =
                             state
 
                         Just s ->
-                            GameState s food (Just dir) (Just dir)
+                            { state | snake = s, lastDir = Just dir }
 
 
 modStr : Point -> Char -> List String -> List String
@@ -196,7 +204,7 @@ centreText lines =
 
 
 toStr : GameState -> String
-toStr (GameState snake food _ _) =
+toStr { snake, food } =
     case snake of
         [] ->
             centreText [ "Game over!", "r to restart" ]
