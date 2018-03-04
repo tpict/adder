@@ -1,5 +1,6 @@
 import           Control.Concurrent
 import           Data.Maybe
+import           Data.List
 import qualified System.Console.ANSI as ANSI
 import           System.Exit
 import           System.IO
@@ -109,14 +110,12 @@ getInitialState = do
         initX = xMax `div` 2
 
 diffMap :: [String] -> [String] -> [[Maybe Char]]
-diffMap old new = map (\x -> [if e /= f then Just f else Nothing | (e, f) <- x]) b
-  where a = zip old new
-        b = [zip c d | (c, d) <- a]
-
-clearScreen = do
-  ANSI.cursorUp $ yMax + 1
-  putStrLn $ unlines $ replicate yMax $ replicate xMax ' '
-  ANSI.cursorUp $ yMax + 1
+diffMap old new = map (\x -> if length (take 2 (nub x)) == 1 then [] else x) changed
+  where pairs = map (\(l1, l2) -> zip l1 l2) $ zip old new
+        changed =
+          map (\l ->
+            map (\(c1, c2) -> if c1 /= c2 then Just c2 else Nothing) l
+          ) pairs
 
 handleInput c = do
   dir <- toDir <$> getChar
