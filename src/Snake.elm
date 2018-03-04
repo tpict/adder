@@ -80,6 +80,7 @@ monoStyle =
     style
         [ ( "font-family", "monospace" )
         , ( "font-size", "48px" )
+        , ( "text-align", "center" )
         ]
 
 

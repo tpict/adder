@@ -51,7 +51,12 @@ initState =
         snake =
             map (\x -> Point initY x) <| range initHead initX
     in
-        placeFood <| GameState snake (Point 0 0) Nothing (Just left)
+        placeFood <|
+            { snake = snake
+            , food = Point 0 0
+            , dir = Nothing
+            , lastDir = Just left
+            }
 
 
 reset : GameState -> GameState
@@ -192,7 +197,7 @@ centreText lines =
             (yMax - length lines) // 2
 
         yBottomPadAmount =
-            yMax - yTopPadAmount
+            yMax - yTopPadAmount - 1
 
         yTopPad =
             join "" <| repeat yTopPadAmount "<br>"

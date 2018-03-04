@@ -50,7 +50,7 @@ move state@(GameState (x:xs) food (Just dir) _ _)
   | not $ inRange newHead yMax xMax = state { snake = [] }
 
   -- if the head has collided with the tail
-  | elem newHead (x:xs) == True = state { snake = [] }
+  | elem newHead (x:xs) = state { snake = [] }
 
   -- if the head is over food
   | newHead == food = placeFood state {
@@ -79,7 +79,8 @@ addFood food map = modStr food 'O' map
 
 toStr :: GameState -> String
 toStr (GameState { snake = [] }) = "Game over!"
-toStr (GameState snake food _ _ _) = unlines $ addSnake snake $ addFood food emptyMap
+toStr (GameState snake food _ _ _) =
+  unlines $ addSnake snake $ addFood food emptyMap
 
 toDir :: Char -> Maybe Point
 toDir c
@@ -92,19 +93,19 @@ toDir c
 changeDir :: Maybe Point -> GameState -> GameState
 changeDir Nothing state = state
 changeDir newDir state
-  | ((|+|) <$> newDir <*> (lastDir state)) == Just (Point 0 0) = state
+  | summed == Just (Point 0 0) = state
   | otherwise = state { dir = newDir }
+  where summed = (|+|) <$> newDir <*> (lastDir state)
 
 getInitialState = do
     gen <- getStdGen
-    state <- return GameState {
-      snake = [Point initY x | x <- reverse [initX - initLen + 1..initX]],
+    return $ placeFood GameState {
+      snake = map (Point initY) $ reverse [initX - initLen + 1..initX],
       food = Point 0 0,
       dir = Nothing,
       lastDir = Just (Point 0 1),
       randGen = gen
     }
-    return $ placeFood state
   where initY = yMax `div` 2
         initX = xMax `div` 2
 
