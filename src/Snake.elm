@@ -27,8 +27,7 @@ textHtml t =
         []
 
 
-type alias Model =
-    { state : GameState }
+type alias Model = GameState
 
 
 type Msg
@@ -44,10 +43,10 @@ update msg model =
             ( model, Cmd.none )
 
         KeyDown key ->
-            ( { model | state = handleInput key model.state }, Cmd.none )
+            ( handleInput key model, Cmd.none )
 
         Move ->
-            ( { model | state = move model.state }, loop )
+            ( move model, loop )
 
 
 tabindex : Attribute msg
@@ -57,7 +56,7 @@ tabindex =
 
 view : Model -> Html Msg
 view model =
-    div [ monoStyle, tabindex, onKeyDown KeyDown ] [ textHtml <| toStr model.state ]
+    div [ monoStyle, tabindex, onKeyDown KeyDown ] [ textHtml <| toStr model ]
 
 
 loop : Cmd Msg
@@ -68,7 +67,7 @@ loop =
 main : Program Never Model Msg
 main =
     program
-        { init = ( { state = initState }, loop )
+        { init = ( initState, loop )
         , view = view
         , update = update
         , subscriptions = (\_ -> Sub.none)
@@ -94,35 +93,35 @@ handleInput c =
     case c of
         -- up arrow
         38 ->
-            changeDir <| Just up
+            changeDir <| up
 
         -- w key
         87 ->
-            changeDir <| Just up
+            changeDir <| up
 
         -- left arrow
         37 ->
-            changeDir <| Just left
+            changeDir <| left
 
         -- a key
         65 ->
-            changeDir <| Just left
+            changeDir <| left
 
         -- down arrow
         40 ->
-            changeDir <| Just down
+            changeDir <| down
 
         -- s key
         83 ->
-            changeDir <| Just down
+            changeDir <| down
 
         -- right arrow
         39 ->
-            changeDir <| Just right
+            changeDir <| right
 
         -- d key
         68 ->
-            changeDir <| Just right
+            changeDir <| right
 
         -- r key
         82 ->

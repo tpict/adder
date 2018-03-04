@@ -2,7 +2,7 @@ module GameState exposing (..)
 
 import List exposing (all, drop, foldl, length, map, maximum, member, range, repeat)
 import List.Extra exposing (init, splitAt)
-import Maybe exposing (Maybe, map2, withDefault)
+import Maybe exposing (Maybe, withDefault)
 import String exposing (fromList, join, toList)
 import Point exposing (..)
 import GlueRandom exposing (randomInt)
@@ -31,8 +31,8 @@ emptyMap =
 type alias GameState =
     { snake : List Point
     , food : Point
-    , dir : Maybe Point
-    , lastDir : Maybe Point
+    , dir : Point
+    , lastDir : Point
     }
 
 
@@ -54,8 +54,8 @@ initState =
         placeFood <|
             { snake = snake
             , food = Point 0 0
-            , dir = Nothing
-            , lastDir = Just left
+            , dir = Point 0 0
+            , lastDir = left
             }
 
 
@@ -69,17 +69,12 @@ reset state =
             state
 
 
-changeDir : Maybe Point -> GameState -> GameState
+changeDir : Point -> GameState -> GameState
 changeDir newDir state =
-    case newDir of
-        Nothing ->
-            state
-
-        _ ->
-            if map2 add newDir state.lastDir == Just (Point 0 0) then
-                state
-            else
-                { state | dir = newDir }
+    if add newDir state.lastDir == Point 0 0 then
+      state
+    else
+      { state | dir = newDir }
 
 
 placeFood : GameState -> GameState
@@ -106,19 +101,19 @@ placeFood state =
 move : GameState -> GameState
 move ({ snake, food, dir, lastDir } as state) =
     case ( snake, food, dir, lastDir ) of
-        ( _, _, Nothing, _ ) ->
+        ( _, _, Point 0 0, _ ) ->
             state
 
         ( [], _, _, _ ) ->
             state
 
-        ( x :: xs, food, Just dir, lastDir ) ->
+        ( x :: xs, food, dir, lastDir ) ->
             let
                 newHead =
                     add dir x
 
                 newSnake =
-                    init (newHead :: x :: xs)
+                    init (newHead :: x :: xs) |> withDefault []
             in
                 if not (inRange newHead yMax xMax) then
                     -- collided with wall
@@ -131,16 +126,11 @@ move ({ snake, food, dir, lastDir } as state) =
                     placeFood <|
                         { state
                             | snake = newHead :: x :: xs
-                            , lastDir = Just dir
+                            , lastDir = dir
                         }
                 else
                     -- regular movement
-                    case newSnake of
-                        Nothing ->
-                            state
-
-                        Just s ->
-                            { state | snake = s, lastDir = Just dir }
+                    { state | snake = newSnake, lastDir = dir }
 
 
 modStr : Point -> Char -> List String -> List String
