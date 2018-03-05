@@ -18,12 +18,12 @@ getY (Point y _) = y
 
 up : Point
 up =
-    Point -1 0
+    Point 1 0
 
 
 down : Point
 down =
-    Point 1 0
+    Point -1 0
 
 
 left : Point

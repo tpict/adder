@@ -14,13 +14,13 @@ import Process
 import Time exposing (second)
 import Point exposing (..)
 
+
 -- import Game.Resources as Resources exposing (Resources)
+
 import Game.TwoD as Game
 import Game.TwoD.Render as Render exposing (Renderable)
 import Game.TwoD.Camera as Camera exposing (Camera)
-
 import GlueRandom exposing (randomInt)
-
 
 
 yMax : Int
@@ -68,8 +68,8 @@ initState =
             , food = Point 0 0
             , dir = Point 0 0
             , lastDir = left
-            , screen = (800, 600)
-            , camera = Camera.fixedArea (yMax * xMax |> toFloat) (6.0, 4.0)
+            , screen = ( 800, 600 )
+            , camera = Camera.fixedArea (yMax * xMax |> toFloat) ( 6.0, 4.0 )
             }
 
 
@@ -86,9 +86,9 @@ reset state =
 changeDir : Point -> Model -> Model
 changeDir newDir state =
     if add newDir state.lastDir == Point 0 0 then
-      state
+        state
     else
-      { state | dir = newDir }
+        { state | dir = newDir }
 
 
 placeFood : Model -> Model
@@ -184,31 +184,43 @@ tabindex : Attribute msg
 tabindex =
     attribute "tabindex" "0"
 
+
+renderFood : Point -> Renderable
+renderFood food =
+    Render.sprite
+        { position = ( getX food |> toFloat, getY food |> toFloat )
+        , size = ( 1.0, 1.0 )
+        , texture = Nothing
+        }
+
+
 renderSnake : List Point -> List Renderable
-renderSnake snake = map (\point ->
-  Render.sprite
-  { position = ( getX point |> toFloat, getY point |> toFloat)
-  , size = ( 1.0, 1.0 )
-  , texture = Nothing
-  }
-  ) snake
+renderSnake snake =
+    map
+        (\point ->
+            Render.sprite
+                { position = ( getX point |> toFloat, getY point |> toFloat )
+                , size = ( 1.0, 1.0 )
+                , texture = Nothing
+                }
+        )
+        snake
 
 
 render : Model -> List Renderable
-render { snake } =
-  concat [ renderSnake snake ]
+render { snake, food } =
+    concat [ renderSnake snake, [ renderFood food ] ]
 
 
 view : Model -> Html Msg
 view ({ screen, camera } as model) =
     div [ tabindex, onKeyDown KeyDown ]
         [ Game.render
-        { 
-          time = 0,
-          camera = camera,
-         size = screen
-        }
-        (render model)
+            { time = 0
+            , camera = camera
+            , size = screen
+            }
+            (render model)
         ]
 
 
