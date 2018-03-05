@@ -1,0 +1,5 @@
+{
+  "*.elm": {
+    "start": "elm reactor"
+  }
+}

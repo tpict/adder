@@ -10,6 +10,12 @@ add (Point y1 x1) (Point y2 x2) =
     Point (y1 + y2) (x1 + x2)
 
 
+getX : Point -> Int
+getX (Point _ x) = x
+
+getY : Point -> Int
+getY (Point y _) = y
+
 up : Point
 up =
     Point -1 0

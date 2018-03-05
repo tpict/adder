@@ -6,11 +6,145 @@ import Html.Events exposing (on, keyCode, onInput)
 import Json.Encode exposing (string)
 import Json.Decode as Decode
 import Json.Encode as Encode
+import List exposing (all, concat, drop, foldl, length, map, maximum, member, range, repeat)
+import List.Extra exposing (init, splitAt)
+import Maybe exposing (Maybe, withDefault)
 import Task
 import Process
 import Time exposing (second)
-import GameState exposing (..)
 import Point exposing (..)
+
+-- import Game.Resources as Resources exposing (Resources)
+import Game.TwoD as Game
+import Game.TwoD.Render as Render exposing (Renderable)
+import Game.TwoD.Camera as Camera exposing (Camera)
+
+import GlueRandom exposing (randomInt)
+
+
+
+yMax : Int
+yMax =
+    8
+
+
+xMax : Int
+xMax =
+    12
+
+
+initLen : Int
+initLen =
+    3
+
+
+type alias Model =
+    { snake : List Point
+    , food : Point
+    , dir : Point
+    , lastDir : Point
+    , screen : ( Int, Int )
+    , camera : Camera
+    }
+
+
+initState : Model
+initState =
+    let
+        initY =
+            yMax // 2
+
+        initX =
+            xMax // 2
+
+        initHead =
+            initX - initLen + 1
+
+        snake =
+            map (\x -> Point initY x) <| range initHead initX
+    in
+        placeFood <|
+            { snake = snake
+            , food = Point 0 0
+            , dir = Point 0 0
+            , lastDir = left
+            , screen = (800, 600)
+            , camera = Camera.fixedArea (yMax * xMax |> toFloat) (6.0, 4.0)
+            }
+
+
+reset : Model -> Model
+reset state =
+    case state.snake of
+        [] ->
+            initState
+
+        _ ->
+            state
+
+
+changeDir : Point -> Model -> Model
+changeDir newDir state =
+    if add newDir state.lastDir == Point 0 0 then
+      state
+    else
+      { state | dir = newDir }
+
+
+placeFood : Model -> Model
+placeFood state =
+    let
+        y =
+            randomInt 0 (yMax - 1)
+
+        x =
+            randomInt 0 (xMax - 1)
+
+        p =
+            Point y x
+
+        inSnake =
+            member p state.snake
+    in
+        if inSnake then
+            placeFood state
+        else
+            { state | food = p }
+
+
+move : Model -> Model
+move ({ snake, food, dir, lastDir } as state) =
+    case ( snake, food, dir, lastDir ) of
+        ( _, _, Point 0 0, _ ) ->
+            state
+
+        ( [], _, _, _ ) ->
+            state
+
+        ( x :: xs, food, dir, lastDir ) ->
+            let
+                newHead =
+                    add dir x
+
+                newSnake =
+                    init (newHead :: x :: xs) |> withDefault []
+            in
+                if not (inRange newHead yMax xMax) then
+                    -- collided with wall
+                    { state | snake = [] }
+                else if member newHead (x :: xs) then
+                    -- collided with self
+                    { state | snake = [] }
+                else if newHead == food then
+                    -- eating food
+                    placeFood <|
+                        { state
+                            | snake = newHead :: x :: xs
+                            , lastDir = dir
+                        }
+                else
+                    -- regular movement
+                    { state | snake = newSnake, lastDir = dir }
 
 
 tickDur : Float
@@ -25,9 +159,6 @@ textHtml t =
             |> property "innerHTML"
         ]
         []
-
-
-type alias Model = GameState
 
 
 type Msg
@@ -53,10 +184,32 @@ tabindex : Attribute msg
 tabindex =
     attribute "tabindex" "0"
 
+renderSnake : List Point -> List Renderable
+renderSnake snake = map (\point ->
+  Render.sprite
+  { position = ( getX point |> toFloat, getY point |> toFloat)
+  , size = ( 1.0, 1.0 )
+  , texture = Nothing
+  }
+  ) snake
+
+
+render : Model -> List Renderable
+render { snake } =
+  concat [ renderSnake snake ]
+
 
 view : Model -> Html Msg
-view model =
-    div [ monoStyle, tabindex, onKeyDown KeyDown ] [ textHtml <| toStr model ]
+view ({ screen, camera } as model) =
+    div [ tabindex, onKeyDown KeyDown ]
+        [ Game.render
+        { 
+          time = 0,
+          camera = camera,
+         size = screen
+        }
+        (render model)
+        ]
 
 
 loop : Cmd Msg
@@ -74,21 +227,12 @@ main =
         }
 
 
-monoStyle : Attribute Msg
-monoStyle =
-    style
-        [ ( "font-family", "monospace" )
-        , ( "font-size", "48px" )
-        , ( "text-align", "center" )
-        ]
-
-
 onKeyDown : (Int -> msg) -> Attribute msg
 onKeyDown tagger =
     on "keydown" (Decode.map tagger keyCode)
 
 
-handleInput : Int -> GameState -> GameState
+handleInput : Int -> Model -> Model
 handleInput c =
     case c of
         -- up arrow
