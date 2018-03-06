@@ -23,12 +23,12 @@ import WebGL.Texture as Texture exposing (Texture)
 
 yMax : Int
 yMax =
-    8
+    16
 
 
 xMax : Int
 xMax =
-    12
+    16
 
 
 initLen : Int
@@ -50,6 +50,12 @@ type alias Model =
 initState : Model
 initState =
     let
+        floatY =
+            toFloat yMax
+
+        floatX =
+            toFloat xMax
+
         initY =
             yMax // 2
 
@@ -67,8 +73,8 @@ initState =
             , food = Point 0 0
             , dir = Point 0 0
             , lastDir = left
-            , screen = ( 800, 600 )
-            , camera = Camera.fixedArea (yMax * xMax |> toFloat) ( 6.0, 4.0 )
+            , screen = ( xMax * 32, yMax * 32 )
+            , camera = Camera.fixedArea (floatY * floatX) ( floatX / 2.0, floatY / 2.0 )
             , resources = Resources.init
             }
 
@@ -76,7 +82,7 @@ initState =
 init : ( Model, Cmd Msg )
 init =
     initState
-        ! [ Cmd.map Resources (Resources.loadTextures [ "images/bg1.png", "images/bg2.png" ])
+        ! [ Cmd.map Resources (Resources.loadTextures [ "images/bg1.png", "images/bg2.png", "images/apple.png", "images/body.png", "images/head.png", "images/bend.png" ])
           , loop
           ]
 
@@ -197,23 +203,23 @@ tabindex =
     attribute "tabindex" "0"
 
 
-renderFood : Point -> Renderable
-renderFood food =
+renderFood : Point -> Resources -> Renderable
+renderFood food resources =
     Render.sprite
         { position = ( getX food |> toFloat, getY food |> toFloat )
         , size = ( 1.0, 1.0 )
-        , texture = Nothing
+        , texture = Resources.getTexture "images/apple.png" resources
         }
 
 
-renderSnake : List Point -> List Renderable
-renderSnake snake =
+renderSnake : List Point -> Resources -> List Renderable
+renderSnake snake resources =
     map
         (\point ->
             Render.sprite
                 { position = ( getX point |> toFloat, getY point |> toFloat )
                 , size = ( 1.0, 1.0 )
-                , texture = Nothing
+                , texture = Resources.getTexture "images/body.png" resources
                 }
         )
         snake
@@ -224,18 +230,21 @@ getTileForPoint (Point y x) resources =
     let
         remainder =
             rem (y * (xMax + 1) + x) 2
-        tileName = if remainder == 0 then
-            "images/bg1.png"
-          else
-            "images/bg2.png"
-    in Resources.getTexture tileName resources
+
+        tileName =
+            if remainder == 0 then
+                "images/bg1.png"
+            else
+                "images/bg2.png"
+    in
+        Resources.getTexture tileName resources
 
 
 renderBackground : Resources -> List Renderable
 renderBackground resources =
     let
         coords =
-            lift2 (\c1 c2 -> Point c1 c2 ) (range 0 yMax) (range 0 xMax)
+            lift2 (\c1 c2 -> Point c1 c2) (range 0 yMax) (range 0 xMax)
     in
         map
             (\point ->
@@ -250,12 +259,12 @@ renderBackground resources =
 
 render : Model -> List Renderable
 render { snake, food, resources } =
-    concat [ renderBackground resources, renderSnake snake, [ renderFood food ] ]
+    concat [ renderBackground resources, renderSnake snake resources, [ renderFood food resources ] ]
 
 
 view : Model -> Html Msg
 view ({ screen, camera } as model) =
-    div [ tabindex, onKeyDown KeyDown ]
+    div [ tabindex, onKeyDown KeyDown, style [ ( "width", "100%" ), ( "height", "100%" ) ] ]
         [ Game.render
             { time = 0
             , camera = camera
@@ -276,7 +285,7 @@ main =
         { init = init
         , view = view
         , update = update
-        , subscriptions = (\_ -> Sub.none)
+        , subscriptions = subscriptions
         }
 
 
@@ -326,3 +335,8 @@ handleInput c =
 
         _ ->
             identity
+
+
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    Sub.batch []
