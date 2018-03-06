@@ -7,20 +7,18 @@ import Json.Encode exposing (string)
 import Json.Decode as Decode
 import Json.Encode as Encode
 import List exposing (all, concat, drop, foldl, length, map, maximum, member, range, repeat)
-import List.Extra exposing (init, splitAt)
+import List.Extra as LExtra exposing (init, lift2)
 import Maybe exposing (Maybe, withDefault)
 import Task
 import Process
 import Time exposing (second)
 import Point exposing (..)
-
-
--- import Game.Resources as Resources exposing (Resources)
-
 import Game.TwoD as Game
 import Game.TwoD.Render as Render exposing (Renderable)
 import Game.TwoD.Camera as Camera exposing (Camera)
+import Game.Resources as Resources exposing (Resources)
 import GlueRandom exposing (randomInt)
+import WebGL.Texture as Texture exposing (Texture)
 
 
 yMax : Int
@@ -45,6 +43,7 @@ type alias Model =
     , lastDir : Point
     , screen : ( Int, Int )
     , camera : Camera
+    , resources : Resources
     }
 
 
@@ -70,7 +69,16 @@ initState =
             , lastDir = left
             , screen = ( 800, 600 )
             , camera = Camera.fixedArea (yMax * xMax |> toFloat) ( 6.0, 4.0 )
+            , resources = Resources.init
             }
+
+
+init : ( Model, Cmd Msg )
+init =
+    initState
+        ! [ Cmd.map Resources (Resources.loadTextures [ "images/bg1.png", "images/bg2.png" ])
+          , loop
+          ]
 
 
 reset : Model -> Model
@@ -127,7 +135,7 @@ move ({ snake, food, dir, lastDir } as state) =
                     add dir x
 
                 newSnake =
-                    init (newHead :: x :: xs) |> withDefault []
+                    LExtra.init (newHead :: x :: xs) |> withDefault []
             in
                 if not (inRange newHead yMax xMax) then
                     -- collided with wall
@@ -149,7 +157,7 @@ move ({ snake, food, dir, lastDir } as state) =
 
 tickDur : Float
 tickDur =
-    second * 0.25
+    Time.second * 0.25
 
 
 textHtml : String -> Html msg
@@ -165,6 +173,7 @@ type Msg
     = NoOp
     | KeyDown Int
     | Move
+    | Resources Resources.Msg
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -178,6 +187,9 @@ update msg model =
 
         Move ->
             ( move model, loop )
+
+        Resources msg ->
+            { model | resources = Resources.update msg model.resources } ! []
 
 
 tabindex : Attribute msg
@@ -207,9 +219,38 @@ renderSnake snake =
         snake
 
 
+getTileForPoint : Point -> Resources -> Maybe Texture
+getTileForPoint (Point y x) resources =
+    let
+        remainder =
+            rem (y * (xMax + 1) + x) 2
+        tileName = if remainder == 0 then
+            "images/bg1.png"
+          else
+            "images/bg2.png"
+    in Resources.getTexture tileName resources
+
+
+renderBackground : Resources -> List Renderable
+renderBackground resources =
+    let
+        coords =
+            lift2 (\c1 c2 -> Point c1 c2 ) (range 0 yMax) (range 0 xMax)
+    in
+        map
+            (\point ->
+                Render.sprite
+                    { position = ( getX point |> toFloat, getY point |> toFloat )
+                    , size = ( 1.0, 1.0 )
+                    , texture = getTileForPoint point resources
+                    }
+            )
+            coords
+
+
 render : Model -> List Renderable
-render { snake, food } =
-    concat [ renderSnake snake, [ renderFood food ] ]
+render { snake, food, resources } =
+    concat [ renderBackground resources, renderSnake snake, [ renderFood food ] ]
 
 
 view : Model -> Html Msg
@@ -232,7 +273,7 @@ loop =
 main : Program Never Model Msg
 main =
     program
-        { init = ( initState, loop )
+        { init = init
         , view = view
         , update = update
         , subscriptions = (\_ -> Sub.none)
