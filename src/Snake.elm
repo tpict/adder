@@ -19,6 +19,7 @@ import Game.TwoD.Camera as Camera exposing (Camera)
 import Game.Resources as Resources exposing (Resources)
 import GlueRandom exposing (randomInt)
 import WebGL.Texture as Texture exposing (Texture)
+import Debug exposing (..)
 
 
 yMax : Int
@@ -49,9 +50,10 @@ asList ( h, b, t ) =
     h :: b ++ [ t ]
 
 
-
 headInRange : Snake -> Bool
-headInRange (h, _, _) = inRange h.pos yMax xMax
+headInRange ( h, _, _ ) =
+    inRange h.pos yMax xMax
+
 
 positions : Snake -> List Point
 positions snake =
@@ -63,7 +65,6 @@ movePart x d =
     { x | pos = add x.pos d, dir = d, pdir = x.dir }
 
 
-
 collidedWith : Snake -> Point -> Bool
 collidedWith ( h, _, _ ) p =
     p == h.pos
@@ -71,14 +72,16 @@ collidedWith ( h, _, _ ) p =
 
 collidedWithSelf : Snake -> Bool
 collidedWithSelf ( h, b, t ) =
-  let bp = map (\sp -> sp.pos) b
-  in
-    member h.pos bp || h.pos == t.pos
+    let
+        bp =
+            map (\sp -> sp.pos) b
+    in
+        member h.pos bp || h.pos == t.pos
 
 
-grow : Snake -> Point -> Snake
-grow ( h, b, t ) d =
-    ( movePart h d, h :: b, t )
+grow : Snake -> Snake
+grow ( h, b, t ) =
+    ( movePart h h.dir, h :: b, t )
 
 
 trim : Snake -> Snake
@@ -95,8 +98,6 @@ type alias Model =
     { gameOver : Bool
     , snake : Snake
     , food : Point
-    , dir : Point
-    , lastDir : Point
     , screen : ( Int, Int )
     , camera : Camera
     , resources : Resources
@@ -135,8 +136,6 @@ initState =
             { gameOver = False
             , snake = snake
             , food = Point 0 0
-            , dir = Point 0 0
-            , lastDir = left
             , screen = ( xMax * 32, yMax * 32 )
             , camera = Camera.fixedArea (floatY * floatX) ( floatX / 2.0, floatY / 2.0 )
             , resources = Resources.init
@@ -160,11 +159,22 @@ reset state =
 
 
 changeDir : Point -> Model -> Model
-changeDir newDir state =
-    if add newDir state.lastDir == Point 0 0 then
-        state
-    else
-        { state | dir = newDir }
+changeDir newDir ({ snake } as state) =
+    let
+        ( h, b, t ) =
+            snake
+
+        lastDir =
+            h.pdir
+    in
+        if add newDir lastDir == Point 0 0 then
+            state
+        else
+            let
+                nh =
+                    { h | dir = newDir }
+            in
+                { state | snake = ( nh, b, t ) }
 
 
 placeFood : Model -> Model
@@ -189,24 +199,19 @@ placeFood state =
 
 
 move : Model -> Model
-move ({ snake, food, dir, lastDir } as state) =
-    case ( snake, food, dir, lastDir ) of
-        ( _, _, Point 0 0, _ ) ->
-            state
-
-        ( snake, _, dir, lastDir ) ->
-            let
-                ns =
-                    grow snake dir
-            in
-                if collidedWith ns food then
-                  { state | snake = ns, lastDir = dir }
-                else if collidedWithSelf ns then
-                  { state | gameOver = True }
-                else if not (headInRange ns) then
-                  { state | gameOver = True }
-                else
-                  { state | snake = trim ns, lastDir = dir }
+move ({ snake, food } as state) =
+    let
+        ns =
+            grow snake
+    in
+        if collidedWith ns food then
+            placeFood { state | snake = ns }
+        else if collidedWithSelf ns then
+            { state | gameOver = True }
+        else if not (headInRange ns) then
+            { state | gameOver = True }
+        else
+            { state | snake = trim ns }
 
 
 tickDur : Float
@@ -267,11 +272,37 @@ renderSnake : Snake -> Resources -> List Renderable
 renderSnake snake resources =
     map
         (\part ->
-            Render.sprite
-                { position = ( getX part.pos |> toFloat, getY part.pos |> toFloat )
-                , size = ( 1.0, 1.0 )
-                , texture = Resources.getTexture "images/body.png" resources
-                }
+            let
+                straight =
+                    part.dir == part.pdir
+
+                t =
+                    if straight then
+                        "images/body.png"
+                    else
+                        "images/bend.png"
+
+                r =
+                    if straight then
+                        getAngle up part.dir
+                    else
+                        let
+                            offset =
+                                if getAngle part.dir part.pdir > 0 then
+                                    0
+                                else
+                                    pi / 2
+                        in
+                            (getAngle right part.dir) + offset
+            in
+                Render.spriteWithOptions
+                    { position = ( (getX part.pos |> toFloat) + 0.5, (getY part.pos |> toFloat) + 0.5, 0.0 )
+                    , size = ( 1.0, 1.0 )
+                    , tiling = ( 1.0, 1.0 )
+                    , rotation = r
+                    , pivot = ( 0.5, 0.5 )
+                    , texture = Resources.getTexture t resources
+                    }
         )
     <|
         asList snake

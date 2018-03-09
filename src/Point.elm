@@ -16,9 +16,10 @@ sub : Point -> Point -> Point
 sub (Point y1 x1) (Point y2 x2) =
     Point (y1 - y2) (x1 - x2)
 
+
 dot : Point -> Point -> Int
 dot (Point y1 x1) (Point y2 x2) =
-  y1 * y2 + x1 * x2
+    y1 * y2 + x1 * x2
 
 
 getX : Point -> Int
@@ -31,12 +32,9 @@ getY (Point y _) =
     y
 
 
-getAngle : Point -> Float
-getAngle point =
-  let
-      dir = if getX point > 0 then -1 else 1
-      angle = acos (toFloat (dot point up)) * dir
-  in angle
+getAngle : Point -> Point -> Float
+getAngle (Point y1 x1) (Point y2 x2) =
+    atan2 (toFloat (x1 * y2 - y1 * x2)) (toFloat (x1 * x2 + y1 * y2))
 
 
 up : Point
