@@ -95,7 +95,8 @@ trim ( h, b, t ) =
 
 
 type alias Model =
-    { gameOver : Bool
+    { gameStarted : Bool
+    , gameOver : Bool
     , snake : Snake
     , food : Point
     , screen : ( Int, Int )
@@ -133,7 +134,8 @@ initState =
         -- )
     in
         placeFood <|
-            { gameOver = False
+            { gameStarted = False
+            , gameOver = False
             , snake = snake
             , food = Point 0 0
             , screen = ( xMax * 32, yMax * 32 )
@@ -174,7 +176,7 @@ changeDir newDir ({ snake } as state) =
                 nh =
                     { h | dir = newDir }
             in
-                { state | snake = ( nh, b, t ) }
+                { state | snake = ( nh, b, t ), gameStarted = True }
 
 
 placeFood : Model -> Model
@@ -245,7 +247,7 @@ update msg model =
             ( handleInput key model, Cmd.none )
 
         Move ->
-            if model.gameOver then
+            if model.gameOver || not model.gameStarted then
                 ( model, loop )
             else
                 ( move model, loop )
