@@ -283,12 +283,10 @@ renderSnake snake resources =
                         ( "images/bend.png", getAngle right part.dir )
 
                 flipY =
-                    case (getAngle part.dir part.pdir) < 0 of
-                        True ->
-                            -1.0
-
-                        False ->
-                            1.0
+                    if (getAngle part.dir part.pdir) < 0 then
+                        -1.0
+                    else
+                        1.0
             in
                 Render.spriteWithOptions
                     { position = ( (getX part.pos |> toFloat) + 0.5, (getY part.pos |> toFloat) + 0.5, 0.0 )
