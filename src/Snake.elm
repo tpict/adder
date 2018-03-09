@@ -6,9 +6,9 @@ import Html.Events exposing (on, keyCode, onInput)
 import Json.Encode exposing (string)
 import Json.Decode as Decode
 import Json.Encode as Encode
-import List exposing (all, concat, drop, foldl, foldr, head, length, map, maximum, member, range, repeat, tail)
-import List.Extra as LExtra exposing (groupWhile, init, lift2, last)
-import Maybe exposing (Maybe, withDefault, map)
+import List exposing (all, concat, drop, foldl, head, length, map, maximum, member, range, repeat, reverse, take)
+import List.Extra as LExtra exposing (init, last, lift2)
+import Maybe exposing (Maybe, andThen, withDefault)
 import Task
 import Process
 import Time exposing (second)
@@ -36,23 +36,71 @@ initLen =
     3
 
 
+type alias SnakePart =
+    { pos : Point, dir : Point, pdir : Point }
+
+
+type alias Snake =
+    ( SnakePart, List SnakePart, SnakePart )
+
+
+asList : Snake -> List SnakePart
+asList ( h, b, t ) =
+    h :: b ++ [ t ]
+
+
+
+headInRange : Snake -> Bool
+headInRange (h, _, _) = inRange h.pos yMax xMax
+
+positions : Snake -> List Point
+positions snake =
+    map (\x -> x.pos) <| asList snake
+
+
+movePart : SnakePart -> Point -> SnakePart
+movePart x d =
+    { x | pos = add x.pos d, dir = d, pdir = x.dir }
+
+
+
+collidedWith : Snake -> Point -> Bool
+collidedWith ( h, _, _ ) p =
+    p == h.pos
+
+
+collidedWithSelf : Snake -> Bool
+collidedWithSelf ( h, b, t ) =
+  let bp = map (\sp -> sp.pos) b
+  in
+    member h.pos bp || h.pos == t.pos
+
+
+grow : Snake -> Point -> Snake
+grow ( h, b, t ) d =
+    ( movePart h d, h :: b, t )
+
+
+trim : Snake -> Snake
+trim ( h, b, t ) =
+    case reverse b of
+        [] ->
+            ( h, [], t )
+
+        nt :: nb ->
+            ( h, reverse nb, nt )
+
+
 type alias Model =
-    { snake : List DirectedPoint
+    { gameOver : Bool
+    , snake : Snake
     , food : Point
     , dir : Point
+    , lastDir : Point
     , screen : ( Int, Int )
     , camera : Camera
     , resources : Resources
     }
-
-
-trim : List DirectedPoint -> List DirectedPoint
-trim xs =
-    let
-        nohead =
-            tail xs |> withDefault []
-    in
-        LExtra.init nohead |> withDefault []
 
 
 initState : Model
@@ -74,12 +122,21 @@ initState =
             initX - initLen + 1
 
         snake =
-            List.map (\x -> DirectedPoint (Point initY x) left) <| range initHead initX
+            ( { pos = Point initY initHead, dir = left, pdir = left }
+            , [ { pos = Point initY (initHead + 1), dir = left, pdir = left } ]
+            , { pos = Point initY (initHead + 2), dir = left, pdir = left }
+            )
+
+        -- ( { pos = Point initY initHead, dir = left, pdir = left }
+        -- , map (\x -> { pos = Point initY x, dir = left, pdir = left }) <| range (initHead + 1) initX
+        -- )
     in
         placeFood <|
-            { snake = snake
+            { gameOver = False
+            , snake = snake
             , food = Point 0 0
             , dir = Point 0 0
+            , lastDir = left
             , screen = ( xMax * 32, yMax * 32 )
             , camera = Camera.fixedArea (floatY * floatX) ( floatX / 2.0, floatY / 2.0 )
             , resources = Resources.init
@@ -89,37 +146,25 @@ initState =
 init : ( Model, Cmd Msg )
 init =
     initState
-        ! [ Cmd.map Resources (Resources.loadTextures [ "images/bg1.png", "images/bg2.png", "images/apple.png", "images/body.png", "images/head.png", "images/bend.png", "images/tail.png" ])
+        ! [ Cmd.map Resources (Resources.loadTextures [ "images/bg1.png", "images/bg2.png", "images/apple.png", "images/body.png", "images/head.png", "images/bend.png" ])
           , loop
           ]
 
 
 reset : Model -> Model
 reset state =
-    case state.snake of
-        [] ->
-            initState
-
-        _ ->
-            state
-
-
-lastDir : Model -> Point
-lastDir { snake } =
-    head snake |> Maybe.map getDirection |> withDefault origin
+    if state.gameOver then
+        initState
+    else
+        state
 
 
 changeDir : Point -> Model -> Model
 changeDir newDir state =
-    if (lastDir state |> add newDir) == Point 0 0 then
+    if add newDir state.lastDir == Point 0 0 then
         state
     else
         { state | dir = newDir }
-
-
-getSnakePos : Model -> List Point
-getSnakePos { snake } =
-    List.map (\dpoint -> getPosition dpoint) snake
 
 
 placeFood : Model -> Model
@@ -135,7 +180,7 @@ placeFood state =
             Point y x
 
         inSnake =
-            member p <| getSnakePos state
+            member p <| positions state.snake
     in
         if inSnake then
             placeFood state
@@ -144,46 +189,24 @@ placeFood state =
 
 
 move : Model -> Model
-move ({ snake, food, dir } as state) =
-    case ( snake, food, dir ) of
-        ( _, _, Point 0 0 ) ->
+move ({ snake, food, dir, lastDir } as state) =
+    case ( snake, food, dir, lastDir ) of
+        ( _, _, Point 0 0, _ ) ->
             state
 
-        ( [], _, _ ) ->
-            state
-
-        ( x :: xs, food, dir ) ->
+        ( snake, _, dir, lastDir ) ->
             let
-                lastHeadPos =
-                    getPosition x
-
-                newHeadPos =
-                    add dir lastHeadPos
-
-                newHead =
-                    DirectedPoint newHeadPos dir
-
-                newSnake =
-                    LExtra.init (newHead :: x :: xs) |> withDefault []
-
-                lastBodyPos =
-                    List.map getPosition (x :: xs)
+                ns =
+                    grow snake dir
             in
-                if not (inRange newHeadPos yMax xMax) then
-                    -- collided with wall
-                    { state | snake = [] }
-                else if member newHeadPos lastBodyPos then
-                    -- collided with self
-                    { state | snake = [] }
-                else if newHeadPos == food then
-                    -- eating food
-                    placeFood <|
-                        { state
-                            | snake = newHead :: x :: xs
-                        }
+                if collidedWith ns food then
+                  { state | snake = ns, lastDir = dir }
+                else if collidedWithSelf ns then
+                  { state | gameOver = True }
+                else if not (headInRange ns) then
+                  { state | gameOver = True }
                 else
-                    -- regular movement
-                    { state | snake = newSnake }
+                  { state | snake = trim ns, lastDir = dir }
 
 
 tickDur : Float
@@ -217,7 +240,10 @@ update msg model =
             ( handleInput key model, Cmd.none )
 
         Move ->
-            ( move model, loop )
+            if model.gameOver then
+                ( model, loop )
+            else
+                ( move model, loop )
 
         Resources msg ->
             { model | resources = Resources.update msg model.resources } ! []
@@ -228,115 +254,27 @@ tabindex =
     attribute "tabindex" "0"
 
 
-renderFood : Point -> Resources -> List Renderable
+renderFood : Point -> Resources -> Renderable
 renderFood food resources =
     Render.sprite
         { position = ( getX food |> toFloat, getY food |> toFloat )
         , size = ( 1.0, 1.0 )
         , texture = Resources.getTexture "images/apple.png" resources
         }
-        :: []
 
 
-renderSnakeBends : List DirectedPoint -> Resources -> List Renderable
-renderSnakeBends snake resources =
-    List.map
-        (\point ->
-            let
-                pos =
-                    getPosition point
-            in
-                Render.spriteWithOptions
-                    { position = ( (getX pos |> toFloat) + 0.5, (getY pos |> toFloat) + 0.5, 0.0 )
-                    , size = ( 1.0, 1.0 )
-                    , pivot = ( 0.5, 0.5 )
-                    , tiling = ( 1, 1 )
-                    , rotation = getAngle (getDirection point)
-                    , texture = Resources.getTexture "images/bend.png" resources
-                    }
-        )
-    <|
-        withDefault [] <| tail snake
-
-renderSnakeStraights : List DirectedPoint -> Resources -> List Renderable
-renderSnakeStraights snake resources =
-    List.map
-        (\point ->
-            let
-                pos =
-                    getPosition point
-            in
-                Render.spriteWithOptions
-                    { position = ( (getX pos |> toFloat) + 0.5, (getY pos |> toFloat) + 0.5, 0.0 )
-                    , size = ( 1.0, 1.0 )
-                    , pivot = ( 0.5, 0.5 )
-                    , tiling = ( 1, 1 )
-                    , rotation = getAngle (getDirection point)
-                    , texture = Resources.getTexture "images/body.png" resources
-                    }
-        )
-    <|
-        withDefault [] <| LExtra.init snake
-
-
-renderSnake : List DirectedPoint -> Resources -> List Renderable
+renderSnake : Snake -> Resources -> List Renderable
 renderSnake snake resources =
-    let
-        grouped =
-            groupWhile (\x y -> (getDirection x) == (getDirection y)) snake
-
-        trimmedGroups = foldr (\dp acc -> (withDefault [] <| tail dp) :: acc) [] grouped
-
-        straights = concat trimmedGroups
-
-        tgrouped =
-            groupWhile (\x y -> (getDirection x) == (getDirection y)) snake
-
-        bends = foldr (\dp acc -> (withDefault (DirectedPoint origin origin) <| head dp) :: acc) [] tgrouped
-
-        --     List.map (\dp -> tail dp |> withDefault []) grouped |> concat
-    in
-        concat [renderSnakeStraights straights resources, renderSnakeBends bends resources]
-
-
-renderTail : List DirectedPoint -> Resources -> List Renderable
-renderTail snake resources =
-    let
-        snakeTail =
-            withDefault (DirectedPoint origin origin) <| last snake
-
-        pos =
-            getPosition snakeTail
-    in
-        Render.spriteWithOptions
-            { position = ( (getX pos |> toFloat) + 0.5, (getY pos |> toFloat) + 0.5, 0.0 )
-            , size = ( 1.0, 1.0 )
-            , pivot = ( 0.5, 0.5 )
-            , tiling = ( 1, 1 )
-            , rotation = getAngle (getDirection snakeTail)
-            , texture = Resources.getTexture "images/tail.png" resources
-            }
-            :: []
-
-
-renderHead : List DirectedPoint -> Resources -> List Renderable
-renderHead snake resources =
-    let
-        snakeHead =
-            withDefault (DirectedPoint origin origin) <| head snake
-
-        pos =
-            getPosition snakeHead
-    in
-        Render.spriteWithOptions
-            { position = ( (getX pos |> toFloat) + 0.5, (getY pos |> toFloat) + 0.5, 0.0 )
-            , size = ( 1.0, 1.0 )
-            , pivot = ( 0.5, 0.5 )
-            , tiling = ( 1, 1 )
-            , rotation = getAngle (getDirection snakeHead)
-            , texture = Resources.getTexture "images/head.png" resources
-            }
-            :: []
+    map
+        (\part ->
+            Render.sprite
+                { position = ( getX part.pos |> toFloat, getY part.pos |> toFloat )
+                , size = ( 1.0, 1.0 )
+                , texture = Resources.getTexture "images/body.png" resources
+                }
+        )
+    <|
+        asList snake
 
 
 getTileForPoint : Point -> Resources -> Maybe Texture
@@ -360,7 +298,7 @@ renderBackground resources =
         coords =
             lift2 (\c1 c2 -> Point c1 c2) (range 0 yMax) (range 0 xMax)
     in
-        List.map
+        map
             (\point ->
                 Render.sprite
                     { position = ( getX point |> toFloat, getY point |> toFloat )
@@ -373,14 +311,7 @@ renderBackground resources =
 
 render : Model -> List Renderable
 render { snake, food, resources } =
-    List.map (\r -> r resources)
-        [ renderBackground
-        , renderSnake snake
-        , renderTail snake
-        , renderHead snake
-        , renderFood food
-        ]
-        |> concat
+    concat [ renderBackground resources, renderSnake snake resources, [ renderFood food resources ] ]
 
 
 view : Model -> Html Msg
