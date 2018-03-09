@@ -276,29 +276,24 @@ renderSnake snake resources =
                 straight =
                     part.dir == part.pdir
 
-                t =
+                ( t, r ) =
                     if straight then
-                        "images/body.png"
+                        ( "images/body.png", getAngle up part.dir )
                     else
-                        "images/bend.png"
+                        ( "images/bend.png", getAngle right part.dir )
 
-                r =
-                    if straight then
-                        getAngle up part.dir
-                    else
-                        let
-                            offset =
-                                if getAngle part.dir part.pdir > 0 then
-                                    0
-                                else
-                                    pi / 2
-                        in
-                            (getAngle right part.dir) + offset
+                flipY =
+                    case (getAngle part.dir part.pdir) < 0 of
+                        True ->
+                            -1.0
+
+                        False ->
+                            1.0
             in
                 Render.spriteWithOptions
                     { position = ( (getX part.pos |> toFloat) + 0.5, (getY part.pos |> toFloat) + 0.5, 0.0 )
                     , size = ( 1.0, 1.0 )
-                    , tiling = ( 1.0, 1.0 )
+                    , tiling = ( 1.0, flipY )
                     , rotation = r
                     , pivot = ( 0.5, 0.5 )
                     , texture = Resources.getTexture t resources
