@@ -103,8 +103,8 @@ type alias Model =
     }
 
 
-initState : Model
-initState =
+initModel : Model
+initModel =
     let
         floatY =
             toFloat yMax
@@ -139,54 +139,48 @@ initState =
         }
 
 
+loadResources : Cmd Msg
+loadResources =
+    Cmd.map Resources
+        (Resources.loadTextures
+            [ "images/bg1.png"
+            , "images/bg2.png"
+            , "images/apple.png"
+            , "images/body.png"
+            , "images/head.png"
+            , "images/bodybend.png"
+            , "images/tail.png"
+            , "images/tailbend.png"
+            ]
+        )
+
+
 init : ( Model, Cmd Msg )
 init =
-    initState
-        ! [ Cmd.map Resources
-                (Resources.loadTextures
-                    [ "images/bg1.png"
-                    , "images/bg2.png"
-                    , "images/apple.png"
-                    , "images/body.png"
-                    , "images/head.png"
-                    , "images/bodybend.png"
-                    , "images/tail.png"
-                    , "images/tailbend.png"
-                    ]
-                )
-          , loop
-          ]
+    initModel ! [ loadResources, loop ]
 
 
-reset : Model -> Model
-reset state =
-    if state.gameOver then
-        initState
+reset : Model -> ( Model, Cmd Msg )
+reset ({ gameOver, resources } as model) =
+    if gameOver then
+        { initModel | resources = resources } ! []
     else
-        state
+        model ! []
 
 
-changeDir : Model -> ( Model, Cmd Msg )
-changeDir ({ snake, keys } as state) =
+changeDir : Model -> Point -> ( Model, Cmd Msg )
+changeDir ({ snake } as state) newDir =
     let
         ( h, _, _ ) =
             snake
 
         lastDir =
             h.pdir
-
-        mdir =
-            pointFromKeys keys
     in
-        case mdir of
-            Nothing ->
-                state ! []
-
-            Just newDir ->
-                if add newDir lastDir == Point 0 0 then
-                    state ! []
-                else
-                    { state | dir = newDir, gameStarted = True } ! []
+        if add newDir lastDir == Point 0 0 then
+            state ! []
+        else
+            { state | dir = newDir, gameStarted = True } ! []
 
 
 placeFood : Model -> Point -> ( Model, Cmd Msg )
@@ -248,7 +242,13 @@ update msg model =
                     m ! [ cb, loop ]
 
         PlaceFood ->
-            ( model, Random.generate UpdateFood (Random.pair (Random.int 0 (xMax - 1)) (Random.int 0 (yMax - 1))) )
+            ( model
+            , Random.generate UpdateFood
+                (Random.pair
+                    (Random.int 0 (xMax - 1))
+                    (Random.int 0 (yMax - 1))
+                )
+            )
 
         UpdateFood ( x, y ) ->
             placeFood model <| Point y x
@@ -264,7 +264,7 @@ update msg model =
                 _ =
                     log "keys" keys
             in
-                changeDir { model | keys = keys }
+                handleKeys { model | keys = keys }
 
 
 renderFood : Point -> Resources -> List Renderable
@@ -397,35 +397,38 @@ main =
         }
 
 
-pointFromKeys : List Key -> Maybe Point
-pointFromKeys l =
-    case (head l) of
+handleKeys : Model -> ( Model, Cmd Msg )
+handleKeys ({ keys } as m) =
+    case (head keys) of
         Just Keeb.CharW ->
-            Just up
+            changeDir m up
 
         Just Keeb.ArrowUp ->
-            Just up
+            changeDir m up
 
         Just Keeb.CharA ->
-            Just left
+            changeDir m left
 
         Just Keeb.ArrowLeft ->
-            Just left
+            changeDir m left
 
         Just Keeb.CharS ->
-            Just down
+            changeDir m down
 
         Just Keeb.ArrowDown ->
-            Just down
+            changeDir m down
 
         Just Keeb.CharD ->
-            Just right
+            changeDir m right
 
         Just Keeb.ArrowRight ->
-            Just right
+            changeDir m right
+
+        Just Keeb.CharR ->
+            reset m
 
         _ ->
-            Nothing
+            m ! []
 
 
 subscriptions : Model -> Sub Msg
