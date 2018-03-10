@@ -150,10 +150,15 @@ loadResources =
             , "images/bg-d-3.png"
             , "images/apple.png"
             , "images/body.png"
-            , "images/head.png"
             , "images/bodybend.png"
+            , "images/head.png"
             , "images/tail.png"
             , "images/tailbend.png"
+            , "images/bodydead.png"
+            , "images/bodydeadbend.png"
+            , "images/headdead.png"
+            , "images/taildead.png"
+            , "images/taildeadbend.png"
             , "images/title.png"
             , "images/gameover.png"
             ]
@@ -326,8 +331,8 @@ update msg model =
             handleKeys { model | keys = Keeb.update keyMsg model.keys }
 
 
-renderFood : Point -> Resources -> List Renderable
-renderFood food resources =
+renderFood : Model -> List Renderable
+renderFood { food, resources } =
     Render.sprite
         { position = ( getX food |> toFloat, getY food |> toFloat )
         , size = ( 1.0, 1.0 )
@@ -336,24 +341,40 @@ renderFood food resources =
         :: []
 
 
-renderHead : Snake -> Resources -> List Renderable
-renderHead ( h, _, _ ) r =
-    Render.spriteWithOptions
-        { position = ( (getX h.pos |> toFloat) + 0.5, (getY h.pos |> toFloat) + 0.5, 0.0 )
-        , size = ( 1.0, 1.0 )
-        , tiling = ( 1.0, 1.0 )
-        , rotation = getAngle up h.dir
-        , pivot = ( 0.5, 0.5 )
-        , texture = Resources.getTexture "images/head.png" r
-        }
-        :: []
+renderHead : Model -> List Renderable
+renderHead { snake, resources, gameOver } =
+    let
+        ( h, _, _ ) =
+            snake
+
+        tname =
+            if gameOver then
+                "images/headdead.png"
+            else
+                "images/head.png"
+    in
+        Render.spriteWithOptions
+            { position = ( (getX h.pos |> toFloat) + 0.5, (getY h.pos |> toFloat) + 0.5, 0.0 )
+            , size = ( 1.0, 1.0 )
+            , tiling = ( 1.0, 1.0 )
+            , rotation = getAngle up h.dir
+            , pivot = ( 0.5, 0.5 )
+            , texture = Resources.getTexture tname resources
+            }
+            :: []
 
 
-renderPart : String -> SnakePart -> Resources -> Renderable
-renderPart tname part resources =
+renderPart : String -> SnakePart -> Model -> Renderable
+renderPart tname_ part { resources, gameOver } =
     let
         straight =
             part.dir == part.pdir
+
+        tname =
+            if gameOver then
+                tname_ ++ "dead"
+            else
+                tname_
 
         ( t, r ) =
             if straight then
@@ -377,18 +398,26 @@ renderPart tname part resources =
             }
 
 
-renderTail : Snake -> Resources -> List Renderable
-renderTail ( _, _, t ) r =
-    [ renderPart "tail" t r ]
+renderTail : Model -> List Renderable
+renderTail ({ snake } as m) =
+    let
+        ( _, _, t ) =
+            snake
+    in
+        [ renderPart "tail" t m ]
 
 
-renderSnake : Snake -> Resources -> List Renderable
-renderSnake ( _, b, _ ) resources =
-    List.map (\part -> renderPart "body" part resources) b
+renderSnake : Model -> List Renderable
+renderSnake ({ snake } as m) =
+    let
+        ( _, b, _ ) =
+            snake
+    in
+        List.map (\part -> renderPart "body" part m) b
 
 
-renderTitle : Resources -> List Renderable
-renderTitle resources =
+renderTitle : Model -> List Renderable
+renderTitle { resources } =
     Render.sprite
         { position = ( 0.0, 0.0 )
         , size = ( toFloat yMax, toFloat xMax )
@@ -397,8 +426,8 @@ renderTitle resources =
         :: []
 
 
-renderGameOver : Resources -> List Renderable
-renderGameOver resources =
+renderGameOver : Model -> List Renderable
+renderGameOver { resources } =
     Render.sprite
         { position = ( 0.0, 0.0 )
         , size = ( toFloat yMax, toFloat xMax )
@@ -408,7 +437,7 @@ renderGameOver resources =
 
 
 render : Model -> List Renderable
-render { snake, food, resources, gameStarted, gameOver, background } =
+render ({ gameStarted, gameOver, background, resources } as m) =
     let
         g =
             if gameOver then
@@ -418,18 +447,17 @@ render { snake, food, resources, gameStarted, gameOver, background } =
 
         r =
             if gameStarted then
-                [ renderSnake snake
-                , renderTail snake
-                , renderHead snake
-                , renderFood food
+                [ renderSnake
+                , renderTail
+                , renderHead
+                , renderFood
                 , g
                 ]
             else
                 [ renderTitle ]
     in
-        background
-            :: r
-            |> List.map (\f -> f resources)
+        background resources
+            :: (List.map (\f -> f m) r)
             |> concat
 
 
