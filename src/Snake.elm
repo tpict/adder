@@ -1,9 +1,6 @@
 module Snake exposing (..)
 
-import Html exposing (Attribute, Html, program, div, input, text)
-import Html.Attributes exposing (attribute, property, style)
-import Html.Events exposing (on, keyCode, onInput)
-import Json.Decode as Decode
+import Html exposing (Html, program)
 import List exposing (..)
 import Random exposing (..)
 import List.Extra as LExtra exposing (init, last, lift2)
@@ -18,6 +15,7 @@ import Game.TwoD.Camera as Camera exposing (Camera)
 import Game.Resources as Resources exposing (Resources)
 import WebGL.Texture as Texture exposing (Texture)
 import Debug exposing (..)
+import Keyboard.Extra as Keeb exposing (..)
 
 
 yMax : Int
@@ -93,7 +91,8 @@ trim ( h, b, t ) =
 
 
 type alias Model =
-    { gameStarted : Bool
+    { keys : List Key
+    , gameStarted : Bool
     , gameOver : Bool
     , dir : Point
     , snake : Snake
@@ -123,16 +122,17 @@ initState =
             initX - initLen + 1
 
         snake =
-            ( { pos = Point initY initHead, dir = left, pdir = left }
-            , [ { pos = Point initY (initHead + 1), dir = left, pdir = left } ]
-            , { pos = Point initY (initHead + 2), dir = left, pdir = left }
+            ( { pos = Point initY initHead, dir = right, pdir = right }
+            , [ { pos = Point initY (initHead - 1), dir = right, pdir = right } ]
+            , { pos = Point initY (initHead - 2), dir = right, pdir = right }
             )
     in
-        { gameStarted = False
+        { keys = []
+        , gameStarted = False
         , gameOver = False
         , snake = snake
         , dir = left
-        , food = Point 0 0
+        , food = Point initY (initHead + 3)
         , screen = ( xMax * 32, yMax * 32 )
         , camera = Camera.fixedArea (floatY * floatX) ( floatX / 2.0, floatY / 2.0 )
         , resources = Resources.init
@@ -166,19 +166,27 @@ reset state =
         state
 
 
-changeDir : Point -> Model -> Model
-changeDir newDir ({ snake } as state) =
+changeDir : Model -> ( Model, Cmd Msg )
+changeDir ({ snake, keys } as state) =
     let
         ( h, _, _ ) =
             snake
 
         lastDir =
             h.pdir
+
+        mdir =
+            pointFromKeys keys
     in
-        if add newDir lastDir == Point 0 0 then
-            state
-        else
-            { state | dir = newDir, gameStarted = True }
+        case mdir of
+            Nothing ->
+                state ! []
+
+            Just newDir ->
+                if add newDir lastDir == Point 0 0 then
+                    state ! []
+                else
+                    { state | dir = newDir, gameStarted = True } ! []
 
 
 placeFood : Model -> Point -> ( Model, Cmd Msg )
@@ -216,10 +224,10 @@ tickDur =
 
 type Msg
     = NoOp
-    | KeyDown Int
     | Move
     | PlaceFood
     | UpdateFood ( Int, Int )
+    | KeyMsg Keeb.Msg
     | Resources Resources.Msg
 
 
@@ -228,9 +236,6 @@ update msg model =
     case msg of
         NoOp ->
             ( model, Cmd.none )
-
-        KeyDown key ->
-            ( handleInput key model, Cmd.none )
 
         Move ->
             if model.gameOver || not model.gameStarted then
@@ -251,10 +256,15 @@ update msg model =
         Resources msg ->
             { model | resources = Resources.update msg model.resources } ! []
 
+        KeyMsg keyMsg ->
+            let
+                keys =
+                    Keeb.update keyMsg model.keys
 
-tabindex : Attribute msg
-tabindex =
-    attribute "tabindex" "0"
+                _ =
+                    log "keys" keys
+            in
+                changeDir { model | keys = keys }
 
 
 renderFood : Point -> Resources -> List Renderable
@@ -364,14 +374,12 @@ render { snake, food, resources } =
 
 view : Model -> Html Msg
 view ({ screen, camera } as model) =
-    div [ tabindex, onKeyDown KeyDown ]
-        [ Game.render
-            { time = 0
-            , camera = camera
-            , size = screen
-            }
-            (render model)
-        ]
+    Game.render
+        { time = 0
+        , camera = camera
+        , size = screen
+        }
+        (render model)
 
 
 loop : Cmd Msg
@@ -389,54 +397,37 @@ main =
         }
 
 
-onKeyDown : (Int -> msg) -> Attribute msg
-onKeyDown tagger =
-    on "keydown" (Decode.map tagger keyCode)
+pointFromKeys : List Key -> Maybe Point
+pointFromKeys l =
+    case (head l) of
+        Just Keeb.CharW ->
+            Just up
 
+        Just Keeb.ArrowUp ->
+            Just up
 
-handleInput : Int -> Model -> Model
-handleInput c =
-    case c of
-        -- up arrow
-        38 ->
-            changeDir up
+        Just Keeb.CharA ->
+            Just left
 
-        -- w key
-        87 ->
-            changeDir up
+        Just Keeb.ArrowLeft ->
+            Just left
 
-        -- left arrow
-        37 ->
-            changeDir left
+        Just Keeb.CharS ->
+            Just down
 
-        -- a key
-        65 ->
-            changeDir left
+        Just Keeb.ArrowDown ->
+            Just down
 
-        -- down arrow
-        40 ->
-            changeDir down
+        Just Keeb.CharD ->
+            Just right
 
-        -- s key
-        83 ->
-            changeDir down
-
-        -- right arrow
-        39 ->
-            changeDir right
-
-        -- d key
-        68 ->
-            changeDir right
-
-        -- r key
-        82 ->
-            reset
+        Just Keeb.ArrowRight ->
+            Just right
 
         _ ->
-            identity
+            Nothing
 
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Sub.batch []
+    Sub.batch [ Sub.map KeyMsg Keeb.subscriptions ]
