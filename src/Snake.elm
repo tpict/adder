@@ -106,25 +106,16 @@ type alias Model =
 initModel : Model
 initModel =
     let
-        floatY =
-            toFloat yMax
-
-        floatX =
-            toFloat xMax
-
         initY =
             yMax // 2
 
         initX =
             xMax // 2
 
-        initHead =
-            initX - initLen + 1
-
         snake =
-            ( { pos = Point initY initHead, dir = right, pdir = right }
-            , [ { pos = Point initY (initHead - 1), dir = right, pdir = right } ]
-            , { pos = Point initY (initHead - 2), dir = right, pdir = right }
+            ( { pos = Point initY initX, dir = right, pdir = right }
+            , [ { pos = Point initY (initX - 1), dir = right, pdir = right } ]
+            , { pos = Point initY (initX - 2), dir = right, pdir = right }
             )
     in
         { keys = []
@@ -132,9 +123,13 @@ initModel =
         , gameOver = False
         , snake = snake
         , dir = left
-        , food = Point initY (initHead + 3)
+        , food = Point initY (initX + 3)
         , screen = ( xMax * 32, yMax * 32 )
-        , camera = Camera.fixedArea (floatY * floatX) ( floatX / 2.0, floatY / 2.0 )
+        , camera =
+            Camera.fixedArea (toFloat (yMax * xMax))
+                ( (toFloat (xMax // 2))
+                , (toFloat (yMax // 2))
+                )
         , resources = Resources.init
         }
 
@@ -151,6 +146,7 @@ loadResources =
             , "images/bodybend.png"
             , "images/tail.png"
             , "images/tailbend.png"
+            , "images/title.png"
             ]
         )
 
@@ -204,7 +200,7 @@ move ({ snake, food, dir } as state) =
         if collidedWith ns food then
             update PlaceFood { state | snake = ns }
         else if collidedWithSelf ns then
-            ( { state | gameOver = True }, Cmd.none )
+            ( { state | snake = ns, gameOver = True }, Cmd.none )
         else if not (headInRange ns) then
             ( { state | gameOver = True }, Cmd.none )
         else
@@ -353,14 +349,25 @@ renderBackground resources =
             coords
 
 
+renderTitle : Resources -> List Renderable
+renderTitle resources =
+    Render.sprite
+        { position = ( 0.0, 0.0 )
+        , size = ( toFloat yMax, toFloat xMax)
+        , texture = Resources.getTexture "images/title.png" resources
+        }
+        :: []
+
+
 render : Model -> List Renderable
-render { snake, food, resources } =
+render { snake, food, resources, gameStarted } =
     List.map (\f -> f resources)
         [ renderBackground
         , renderSnake snake
-        , renderHead snake
         , renderTail snake
+        , renderHead snake
         , renderFood food
+        , if not gameStarted then renderTitle else \_ -> []
         ]
         |> concat
 
