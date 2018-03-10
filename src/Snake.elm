@@ -134,10 +134,6 @@ initState =
             , [ { pos = Point initY (initHead + 1), dir = left, pdir = left } ]
             , { pos = Point initY (initHead + 2), dir = left, pdir = left }
             )
-
-        -- ( { pos = Point initY initHead, dir = left, pdir = left }
-        -- , map (\x -> { pos = Point initY x, dir = left, pdir = left }) <| range (initHead + 1) initX
-        -- )
     in
         placeFood <|
             { gameStarted = False
@@ -154,7 +150,7 @@ initState =
 init : ( Model, Cmd Msg )
 init =
     initState
-        ! [ Cmd.map Resources (Resources.loadTextures [ "images/bg1.png", "images/bg2.png", "images/apple.png", "images/body.png", "images/head.png", "images/bend.png", "images/tail.png" ])
+        ! [ Cmd.map Resources (Resources.loadTextures [ "images/bg1.png", "images/bg2.png", "images/apple.png", "images/body.png", "images/head.png", "images/bodybend.png", "images/tail.png", "images/tailbend.png" ])
           , loop
           ]
 
@@ -224,15 +220,6 @@ tickDur =
     Time.second * 0.175
 
 
-textHtml : String -> Html msg
-textHtml t =
-    div
-        [ string t
-            |> property "innerHTML"
-        ]
-        []
-
-
 type Msg
     = NoOp
     | KeyDown Int
@@ -274,60 +261,55 @@ renderFood food resources =
         :: []
 
 
-renderTermination : SnakePart -> String -> Resources -> List Renderable
-renderTermination p t r =
+renderHead : Snake -> Resources -> List Renderable
+renderHead ( h, _, _ ) r =
     Render.spriteWithOptions
-        { position = ( (getX p.pos |> toFloat) + 0.5, (getY p.pos |> toFloat) + 0.5, 0.0 )
+        { position = ( (getX h.pos |> toFloat) + 0.5, (getY h.pos |> toFloat) + 0.5, 0.0 )
         , size = ( 1.0, 1.0 )
         , tiling = ( 1.0, 1.0 )
-        , rotation = getAngle up p.dir
+        , rotation = getAngle up h.dir
         , pivot = ( 0.5, 0.5 )
-        , texture = Resources.getTexture t r
+        , texture = Resources.getTexture "images/head.png" r
         }
         :: []
 
 
-renderHead : Snake -> Resources -> List Renderable
-renderHead ( h, _, _ ) r =
-    renderTermination h "images/head.png" r
+renderPart : String -> SnakePart -> Resources -> Renderable
+renderPart tname part resources =
+    let
+        straight =
+            part.dir == part.pdir
+
+        ( t, r ) =
+            if straight then
+                ( "images/" ++ tname ++ ".png", getAngle up part.dir )
+            else
+                ( "images/" ++ tname ++ "bend.png", getAngle right part.dir )
+
+        flipY =
+            if (getAngle part.dir part.pdir) < 0 then
+                -1.0
+            else
+                1.0
+    in
+        Render.spriteWithOptions
+            { position = ( (getX part.pos |> toFloat) + 0.5, (getY part.pos |> toFloat) + 0.5, 0.0 )
+            , size = ( 1.0, 1.0 )
+            , tiling = ( 1.0, flipY )
+            , rotation = r
+            , pivot = ( 0.5, 0.5 )
+            , texture = Resources.getTexture t resources
+            }
 
 
 renderTail : Snake -> Resources -> List Renderable
 renderTail ( _, _, t ) r =
-    renderTermination t "images/tail.png" r
+    [ renderPart "tail" t r ]
 
 
 renderSnake : Snake -> Resources -> List Renderable
-renderSnake snake resources =
-    map
-        (\part ->
-            let
-                straight =
-                    part.dir == part.pdir
-
-                ( t, r ) =
-                    if straight then
-                        ( "images/body.png", getAngle up part.dir )
-                    else
-                        ( "images/bend.png", getAngle right part.dir )
-
-                flipY =
-                    if (getAngle part.dir part.pdir) < 0 then
-                        -1.0
-                    else
-                        1.0
-            in
-                Render.spriteWithOptions
-                    { position = ( (getX part.pos |> toFloat) + 0.5, (getY part.pos |> toFloat) + 0.5, 0.0 )
-                    , size = ( 1.0, 1.0 )
-                    , tiling = ( 1.0, flipY )
-                    , rotation = r
-                    , pivot = ( 0.5, 0.5 )
-                    , texture = Resources.getTexture t resources
-                    }
-        )
-    <|
-        headlessAsList snake
+renderSnake (_, b, _) resources =
+    map (\part -> renderPart "body" part resources) b
 
 
 getTileForCoords : Int -> Int -> Resources -> Maybe Texture
@@ -368,8 +350,7 @@ render { snake, food, resources } =
         [ renderBackground
         , renderSnake snake
         , renderHead snake
-
-        -- , renderTail snake
+        , renderTail snake
         , renderFood food
         ]
         |> concat
@@ -377,16 +358,13 @@ render { snake, food, resources } =
 
 view : Model -> Html Msg
 view ({ screen, camera } as model) =
-    div []
-        [ Html.node "link" [ Html.Attributes.rel "stylesheet", Html.Attributes.href "style.css" ] []
-        , div [ tabindex, onKeyDown KeyDown, style [ ( "width", "100%" ), ( "height", "100%" ) ] ]
-            [ Game.render
-                { time = 0
-                , camera = camera
-                , size = screen
-                }
-                (render model)
-            ]
+    div [ tabindex, onKeyDown KeyDown ]
+        [ Game.render
+            { time = 0
+            , camera = camera
+            , size = screen
+            }
+            (render model)
         ]
 
 
