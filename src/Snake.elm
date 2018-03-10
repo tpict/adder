@@ -45,14 +45,9 @@ type alias Snake =
     ( SnakePart, List SnakePart, SnakePart )
 
 
-headlessAsList : Snake -> List SnakePart
-headlessAsList ( _, b, t ) =
-    b ++ [ t ]
-
-
 asList : Snake -> List SnakePart
 asList ( h, b, t ) =
-    h :: (headlessAsList ( h, b, t ))
+    h :: b ++ [ t ]
 
 
 headInRange : Snake -> Bool
@@ -150,7 +145,18 @@ initState =
 init : ( Model, Cmd Msg )
 init =
     initState
-        ! [ Cmd.map Resources (Resources.loadTextures [ "images/bg1.png", "images/bg2.png", "images/apple.png", "images/body.png", "images/head.png", "images/bodybend.png", "images/tail.png", "images/tailbend.png" ])
+        ! [ Cmd.map Resources
+                (Resources.loadTextures
+                    [ "images/bg1.png"
+                    , "images/bg2.png"
+                    , "images/apple.png"
+                    , "images/body.png"
+                    , "images/head.png"
+                    , "images/bodybend.png"
+                    , "images/tail.png"
+                    , "images/tailbend.png"
+                    ]
+                )
           , loop
           ]
 
@@ -308,7 +314,7 @@ renderTail ( _, _, t ) r =
 
 
 renderSnake : Snake -> Resources -> List Renderable
-renderSnake (_, b, _) resources =
+renderSnake ( _, b, _ ) resources =
     map (\part -> renderPart "body" part resources) b
 
 
