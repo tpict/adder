@@ -8,7 +8,7 @@ import Game.TwoD.Render as Render exposing (Renderable)
 import Html exposing (Html, program)
 import Keyboard.Extra as Keeb exposing (..)
 import List exposing (..)
-import List.Extra as LExtra exposing (lift2)
+import List.Extra as LExtra exposing (lift2, zip)
 import Maybe exposing (Maybe)
 import Point exposing (..)
 import Process
@@ -100,6 +100,7 @@ type alias Model =
     , screen : ( Int, Int )
     , camera : Camera
     , resources : Resources
+    , background : Resources -> List Renderable
     }
 
 
@@ -131,6 +132,7 @@ initModel =
                 , (toFloat (yMax // 2))
                 )
         , resources = Resources.init
+        , background = \_ -> []
         }
 
 
@@ -138,8 +140,14 @@ loadResources : Cmd Msg
 loadResources =
     Cmd.map Resources
         (Resources.loadTextures
-            [ "images/bg1.png"
-            , "images/bg2.png"
+            [ "images/bg-l-0.png"
+            , "images/bg-l-1.png"
+            , "images/bg-l-2.png"
+            , "images/bg-l-3.png"
+            , "images/bg-d-0.png"
+            , "images/bg-d-1.png"
+            , "images/bg-d-2.png"
+            , "images/bg-d-3.png"
             , "images/apple.png"
             , "images/body.png"
             , "images/head.png"
@@ -147,19 +155,30 @@ loadResources =
             , "images/tail.png"
             , "images/tailbend.png"
             , "images/title.png"
+            , "images/gameover.png"
             ]
         )
 
 
 init : ( Model, Cmd Msg )
 init =
-    initModel ! [ loadResources, loop ]
+    let
+        model =
+            initModel
+    in
+        model ! [ loadResources, send CreateBackground, loop ]
+
+
+send : msg -> Cmd msg
+send msg =
+    Task.succeed msg
+        |> Task.perform identity
 
 
 reset : Model -> ( Model, Cmd Msg )
-reset ({ gameOver, resources } as model) =
+reset ({ gameOver, resources, background } as model) =
     if gameOver then
-        { initModel | resources = resources } ! []
+        { initModel | resources = resources, background = background } ! []
     else
         model ! []
 
@@ -177,6 +196,49 @@ changeDir ({ snake } as state) newDir =
             state ! []
         else
             { state | dir = newDir, gameStarted = True } ! []
+
+
+getTileForCoords : Int -> Int -> Int -> Resources -> Maybe Texture
+getTileForCoords x y t resources =
+    let
+        remainder =
+            rem (y * (xMax + 1) + x) 2
+
+        prefix =
+            if remainder == 0 then
+                "images/bg-l-"
+            else
+                "images/bg-d-"
+
+        tileName =
+            prefix ++ toString t ++ ".png"
+    in
+        Resources.getTexture tileName resources
+
+
+createBackground : Model -> List ( Int, Int ) -> ( Model, Cmd Msg )
+createBackground model l =
+    let
+        coords =
+            lift2 (\x y -> ( x, y )) (range 0 xMax) (range 0 yMax)
+
+        background =
+            \resources ->
+                List.map
+                    (\( ( x, y ), ( r, t ) ) ->
+                        Render.spriteWithOptions
+                            { position = ( toFloat x + 0.5, toFloat y + 0.5, 0.0 )
+                            , pivot = ( 0.5, 0.5 )
+                            , tiling = ( 1.0, 1.0 )
+                            , rotation = pi / 2 * toFloat r
+                            , size = ( 1.0, 1.0 )
+                            , texture = getTileForCoords x y t resources
+                            }
+                    )
+                <|
+                    LExtra.zip coords l
+    in
+        { model | background = background } ! []
 
 
 placeFood : Model -> Point -> ( Model, Cmd Msg )
@@ -217,6 +279,8 @@ type Msg
     | Move
     | PlaceFood
     | UpdateFood ( Int, Int )
+    | CreateBackground
+    | ActuallyCreateBackground (List ( Int, Int ))
     | KeyMsg Keeb.Msg
     | Resources Resources.Msg
 
@@ -248,6 +312,12 @@ update msg model =
 
         UpdateFood ( x, y ) ->
             placeFood model <| Point y x
+
+        CreateBackground ->
+            ( model, Random.generate ActuallyCreateBackground (Random.list ((yMax + 1) * (xMax + 1)) (pair (Random.int 0 3) (Random.int 0 3))) )
+
+        ActuallyCreateBackground l ->
+            createBackground model l
 
         Resources msg ->
             { model | resources = Resources.update msg model.resources } ! []
@@ -317,59 +387,50 @@ renderSnake ( _, b, _ ) resources =
     List.map (\part -> renderPart "body" part resources) b
 
 
-getTileForCoords : Int -> Int -> Resources -> Maybe Texture
-getTileForCoords x y resources =
-    let
-        remainder =
-            rem (y * (xMax + 1) + x) 2
-
-        tileName =
-            if remainder == 0 then
-                "images/bg1.png"
-            else
-                "images/bg2.png"
-    in
-        Resources.getTexture tileName resources
-
-
-renderBackground : Resources -> List Renderable
-renderBackground resources =
-    let
-        coords =
-            lift2 (\x y -> ( x, y )) (range 0 xMax) (range 0 yMax)
-    in
-        List.map
-            (\( x, y ) ->
-                Render.sprite
-                    { position = ( toFloat x, toFloat y )
-                    , size = ( 1.0, 1.0 )
-                    , texture = getTileForCoords x y resources
-                    }
-            )
-            coords
-
-
 renderTitle : Resources -> List Renderable
 renderTitle resources =
     Render.sprite
         { position = ( 0.0, 0.0 )
-        , size = ( toFloat yMax, toFloat xMax)
+        , size = ( toFloat yMax, toFloat xMax )
         , texture = Resources.getTexture "images/title.png" resources
         }
         :: []
 
 
+renderGameOver : Resources -> List Renderable
+renderGameOver resources =
+    Render.sprite
+        { position = ( 0.0, 0.0 )
+        , size = ( toFloat yMax, toFloat xMax )
+        , texture = Resources.getTexture "images/gameover.png" resources
+        }
+        :: []
+
+
 render : Model -> List Renderable
-render { snake, food, resources, gameStarted } =
-    List.map (\f -> f resources)
-        [ renderBackground
-        , renderSnake snake
-        , renderTail snake
-        , renderHead snake
-        , renderFood food
-        , if not gameStarted then renderTitle else \_ -> []
-        ]
-        |> concat
+render { snake, food, resources, gameStarted, gameOver, background } =
+    let
+        g =
+            if gameOver then
+                renderGameOver
+            else
+                \_ -> []
+
+        r =
+            if gameStarted then
+                [ renderSnake snake
+                , renderTail snake
+                , renderHead snake
+                , renderFood food
+                , g
+                ]
+            else
+                [ renderTitle ]
+    in
+        background
+            :: r
+            |> List.map (\f -> f resources)
+            |> concat
 
 
 view : Model -> Html Msg

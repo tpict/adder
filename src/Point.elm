@@ -1,7 +1,5 @@
 module Point exposing (..)
 
-import Debug exposing (log)
-
 
 type Point
     = Point Int Int
@@ -10,16 +8,6 @@ type Point
 add : Point -> Point -> Point
 add (Point y1 x1) (Point y2 x2) =
     Point (y1 + y2) (x1 + x2)
-
-
-sub : Point -> Point -> Point
-sub (Point y1 x1) (Point y2 x2) =
-    Point (y1 - y2) (x1 - x2)
-
-
-dot : Point -> Point -> Int
-dot (Point y1 x1) (Point y2 x2) =
-    y1 * y2 + x1 * x2
 
 
 getX : Point -> Int
@@ -72,17 +60,3 @@ inRange (Point y x) my mx =
         < mx
         && x
         >= 0
-
-
-type DirectedPoint
-    = DirectedPoint Point Point
-
-
-getPosition : DirectedPoint -> Point
-getPosition (DirectedPoint position _) =
-    position
-
-
-getDirection : DirectedPoint -> Point
-getDirection (DirectedPoint _ direction) =
-    direction
