@@ -3,10 +3,9 @@ module Snake exposing (..)
 import Html exposing (Attribute, Html, program, div, input, text)
 import Html.Attributes exposing (attribute, property, style)
 import Html.Events exposing (on, keyCode, onInput)
-import Json.Encode exposing (string)
 import Json.Decode as Decode
-import Json.Encode as Encode
-import List exposing (all, concat, drop, foldl, head, length, map, maximum, member, range, repeat, reverse, take)
+import List exposing (..)
+import Random exposing (..)
 import List.Extra as LExtra exposing (init, last, lift2)
 import Maybe exposing (Maybe, andThen, withDefault)
 import Task
@@ -17,7 +16,6 @@ import Game.TwoD as Game
 import Game.TwoD.Render as Render exposing (Renderable)
 import Game.TwoD.Camera as Camera exposing (Camera)
 import Game.Resources as Resources exposing (Resources)
-import GlueRandom exposing (randomInt)
 import WebGL.Texture as Texture exposing (Texture)
 import Debug exposing (..)
 
@@ -57,7 +55,7 @@ headInRange ( h, _, _ ) =
 
 positions : Snake -> List Point
 positions snake =
-    map (\x -> x.pos) <| asList snake
+    List.map (\x -> x.pos) <| asList snake
 
 
 movePart : SnakePart -> Point -> SnakePart
@@ -74,7 +72,7 @@ collidedWithSelf : Snake -> Bool
 collidedWithSelf ( h, b, t ) =
     let
         bp =
-            map (\sp -> sp.pos) b
+            List.map (\sp -> sp.pos) b
     in
         member h.pos bp || h.pos == t.pos
 
@@ -130,16 +128,15 @@ initState =
             , { pos = Point initY (initHead + 2), dir = left, pdir = left }
             )
     in
-        placeFood <|
-            { gameStarted = False
-            , gameOver = False
-            , snake = snake
-            , dir = left
-            , food = Point 0 0
-            , screen = ( xMax * 32, yMax * 32 )
-            , camera = Camera.fixedArea (floatY * floatX) ( floatX / 2.0, floatY / 2.0 )
-            , resources = Resources.init
-            }
+        { gameStarted = False
+        , gameOver = False
+        , snake = snake
+        , dir = left
+        , food = Point 0 0
+        , screen = ( xMax * 32, yMax * 32 )
+        , camera = Camera.fixedArea (floatY * floatX) ( floatX / 2.0, floatY / 2.0 )
+        , resources = Resources.init
+        }
 
 
 init : ( Model, Cmd Msg )
@@ -184,41 +181,32 @@ changeDir newDir ({ snake } as state) =
             { state | dir = newDir, gameStarted = True }
 
 
-placeFood : Model -> Model
-placeFood state =
+placeFood : Model -> Point -> ( Model, Cmd Msg )
+placeFood state p =
     let
-        y =
-            randomInt 0 (yMax - 1)
-
-        x =
-            randomInt 0 (xMax - 1)
-
-        p =
-            Point y x
-
         inSnake =
             member p <| positions state.snake
     in
         if inSnake then
-            placeFood state
+            update PlaceFood state
         else
-            { state | food = p }
+            ( { state | food = p }, Cmd.none )
 
 
-move : Model -> Model
+move : Model -> ( Model, Cmd Msg )
 move ({ snake, food, dir } as state) =
     let
         ns =
             grow snake dir
     in
         if collidedWith ns food then
-            placeFood { state | snake = ns }
+            update PlaceFood { state | snake = ns }
         else if collidedWithSelf ns then
-            { state | gameOver = True }
+            ( { state | gameOver = True }, Cmd.none )
         else if not (headInRange ns) then
-            { state | gameOver = True }
+            ( { state | gameOver = True }, Cmd.none )
         else
-            { state | snake = trim ns }
+            ( { state | snake = trim ns }, Cmd.none )
 
 
 tickDur : Float
@@ -230,6 +218,8 @@ type Msg
     = NoOp
     | KeyDown Int
     | Move
+    | PlaceFood
+    | UpdateFood ( Int, Int )
     | Resources Resources.Msg
 
 
@@ -246,7 +236,17 @@ update msg model =
             if model.gameOver || not model.gameStarted then
                 ( model, loop )
             else
-                ( move model, loop )
+                let
+                    ( m, cb ) =
+                        move model
+                in
+                    m ! [ cb, loop ]
+
+        PlaceFood ->
+            ( model, Random.generate UpdateFood (Random.pair (Random.int 0 (xMax - 1)) (Random.int 0 (yMax - 1))) )
+
+        UpdateFood ( x, y ) ->
+            placeFood model <| Point y x
 
         Resources msg ->
             { model | resources = Resources.update msg model.resources } ! []
@@ -315,7 +315,7 @@ renderTail ( _, _, t ) r =
 
 renderSnake : Snake -> Resources -> List Renderable
 renderSnake ( _, b, _ ) resources =
-    map (\part -> renderPart "body" part resources) b
+    List.map (\part -> renderPart "body" part resources) b
 
 
 getTileForCoords : Int -> Int -> Resources -> Maybe Texture
@@ -339,7 +339,7 @@ renderBackground resources =
         coords =
             lift2 (\x y -> ( x, y )) (range 0 xMax) (range 0 yMax)
     in
-        map
+        List.map
             (\( x, y ) ->
                 Render.sprite
                     { position = ( toFloat x, toFloat y )
@@ -352,7 +352,7 @@ renderBackground resources =
 
 render : Model -> List Renderable
 render { snake, food, resources } =
-    map (\f -> f resources)
+    List.map (\f -> f resources)
         [ renderBackground
         , renderSnake snake
         , renderHead snake
