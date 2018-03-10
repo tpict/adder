@@ -1,21 +1,21 @@
 module Snake exposing (..)
 
-import Html exposing (Html, program)
-import List exposing (..)
-import Random exposing (..)
-import List.Extra as LExtra exposing (init, last, lift2)
-import Maybe exposing (Maybe, andThen, withDefault)
-import Task
-import Process
-import Time exposing (second)
-import Point exposing (..)
-import Game.TwoD as Game
-import Game.TwoD.Render as Render exposing (Renderable)
-import Game.TwoD.Camera as Camera exposing (Camera)
-import Game.Resources as Resources exposing (Resources)
-import WebGL.Texture as Texture exposing (Texture)
 import Debug exposing (..)
+import Game.Resources as Resources exposing (Resources)
+import Game.TwoD as Game
+import Game.TwoD.Camera as Camera exposing (Camera)
+import Game.TwoD.Render as Render exposing (Renderable)
+import Html exposing (Html, program)
 import Keyboard.Extra as Keeb exposing (..)
+import List exposing (..)
+import List.Extra as LExtra exposing (lift2)
+import Maybe exposing (Maybe)
+import Point exposing (..)
+import Process
+import Random exposing (..)
+import Task
+import Time exposing (second)
+import WebGL.Texture as Texture exposing (Texture)
 
 
 yMax : Int
@@ -257,14 +257,7 @@ update msg model =
             { model | resources = Resources.update msg model.resources } ! []
 
         KeyMsg keyMsg ->
-            let
-                keys =
-                    Keeb.update keyMsg model.keys
-
-                _ =
-                    log "keys" keys
-            in
-                handleKeys { model | keys = keys }
+            handleKeys { model | keys = Keeb.update keyMsg model.keys }
 
 
 renderFood : Point -> Resources -> List Renderable
