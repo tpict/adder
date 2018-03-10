@@ -45,9 +45,14 @@ type alias Snake =
     ( SnakePart, List SnakePart, SnakePart )
 
 
+headlessAsList : Snake -> List SnakePart
+headlessAsList ( _, b, t ) =
+    b ++ [ t ]
+
+
 asList : Snake -> List SnakePart
 asList ( h, b, t ) =
-    h :: b ++ [ t ]
+    h :: (headlessAsList ( h, b, t ))
 
 
 headInRange : Snake -> Bool
@@ -62,7 +67,7 @@ positions snake =
 
 movePart : SnakePart -> Point -> SnakePart
 movePart x d =
-    { x | pos = add x.pos d, dir = d, pdir = x.dir }
+    { x | pos = add x.pos d, dir = d, pdir = d }
 
 
 collidedWith : Snake -> Point -> Bool
@@ -79,9 +84,9 @@ collidedWithSelf ( h, b, t ) =
         member h.pos bp || h.pos == t.pos
 
 
-grow : Snake -> Snake
-grow ( h, b, t ) =
-    ( movePart h h.dir, h :: b, t )
+grow : Snake -> Point -> Snake
+grow ( h, b, t ) d =
+    ( movePart h d, { h | dir = d } :: b, t )
 
 
 trim : Snake -> Snake
@@ -97,6 +102,7 @@ trim ( h, b, t ) =
 type alias Model =
     { gameStarted : Bool
     , gameOver : Bool
+    , dir : Point
     , snake : Snake
     , food : Point
     , screen : ( Int, Int )
@@ -137,6 +143,7 @@ initState =
             { gameStarted = False
             , gameOver = False
             , snake = snake
+            , dir = left
             , food = Point 0 0
             , screen = ( xMax * 32, yMax * 32 )
             , camera = Camera.fixedArea (floatY * floatX) ( floatX / 2.0, floatY / 2.0 )
@@ -147,7 +154,7 @@ initState =
 init : ( Model, Cmd Msg )
 init =
     initState
-        ! [ Cmd.map Resources (Resources.loadTextures [ "images/bg1.png", "images/bg2.png", "images/apple.png", "images/body.png", "images/head.png", "images/bend.png" ])
+        ! [ Cmd.map Resources (Resources.loadTextures [ "images/bg1.png", "images/bg2.png", "images/apple.png", "images/body.png", "images/head.png", "images/bend.png", "images/tail.png" ])
           , loop
           ]
 
@@ -163,7 +170,7 @@ reset state =
 changeDir : Point -> Model -> Model
 changeDir newDir ({ snake } as state) =
     let
-        ( h, b, t ) =
+        ( h, _, _ ) =
             snake
 
         lastDir =
@@ -172,11 +179,7 @@ changeDir newDir ({ snake } as state) =
         if add newDir lastDir == Point 0 0 then
             state
         else
-            let
-                nh =
-                    { h | dir = newDir }
-            in
-                { state | snake = ( nh, b, t ), gameStarted = True }
+            { state | dir = newDir, gameStarted = True }
 
 
 placeFood : Model -> Model
@@ -201,10 +204,10 @@ placeFood state =
 
 
 move : Model -> Model
-move ({ snake, food } as state) =
+move ({ snake, food, dir } as state) =
     let
         ns =
-            grow snake
+            grow snake dir
     in
         if collidedWith ns food then
             placeFood { state | snake = ns }
@@ -218,7 +221,7 @@ move ({ snake, food } as state) =
 
 tickDur : Float
 tickDur =
-    Time.second * 0.25
+    Time.second * 0.175
 
 
 textHtml : String -> Html msg
@@ -261,13 +264,37 @@ tabindex =
     attribute "tabindex" "0"
 
 
-renderFood : Point -> Resources -> Renderable
+renderFood : Point -> Resources -> List Renderable
 renderFood food resources =
     Render.sprite
         { position = ( getX food |> toFloat, getY food |> toFloat )
         , size = ( 1.0, 1.0 )
         , texture = Resources.getTexture "images/apple.png" resources
         }
+        :: []
+
+
+renderTermination : SnakePart -> String -> Resources -> List Renderable
+renderTermination p t r =
+    Render.spriteWithOptions
+        { position = ( (getX p.pos |> toFloat) + 0.5, (getY p.pos |> toFloat) + 0.5, 0.0 )
+        , size = ( 1.0, 1.0 )
+        , tiling = ( 1.0, 1.0 )
+        , rotation = getAngle up p.dir
+        , pivot = ( 0.5, 0.5 )
+        , texture = Resources.getTexture t r
+        }
+        :: []
+
+
+renderHead : Snake -> Resources -> List Renderable
+renderHead ( h, _, _ ) r =
+    renderTermination h "images/head.png" r
+
+
+renderTail : Snake -> Resources -> List Renderable
+renderTail ( _, _, t ) r =
+    renderTermination t "images/tail.png" r
 
 
 renderSnake : Snake -> Resources -> List Renderable
@@ -300,11 +327,11 @@ renderSnake snake resources =
                     }
         )
     <|
-        asList snake
+        headlessAsList snake
 
 
-getTileForPoint : Point -> Resources -> Maybe Texture
-getTileForPoint (Point y x) resources =
+getTileForCoords : Int -> Int -> Resources -> Maybe Texture
+getTileForCoords x y resources =
     let
         remainder =
             rem (y * (xMax + 1) + x) 2
@@ -322,14 +349,14 @@ renderBackground : Resources -> List Renderable
 renderBackground resources =
     let
         coords =
-            lift2 (\c1 c2 -> Point c1 c2) (range 0 yMax) (range 0 xMax)
+            lift2 (\x y -> ( x, y )) (range 0 xMax) (range 0 yMax)
     in
         map
-            (\point ->
+            (\( x, y ) ->
                 Render.sprite
-                    { position = ( getX point |> toFloat, getY point |> toFloat )
+                    { position = ( toFloat x, toFloat y )
                     , size = ( 1.0, 1.0 )
-                    , texture = getTileForPoint point resources
+                    , texture = getTileForCoords x y resources
                     }
             )
             coords
@@ -337,18 +364,29 @@ renderBackground resources =
 
 render : Model -> List Renderable
 render { snake, food, resources } =
-    concat [ renderBackground resources, renderSnake snake resources, [ renderFood food resources ] ]
+    map (\f -> f resources)
+        [ renderBackground
+        , renderSnake snake
+        , renderHead snake
+
+        -- , renderTail snake
+        , renderFood food
+        ]
+        |> concat
 
 
 view : Model -> Html Msg
 view ({ screen, camera } as model) =
-    div [ tabindex, onKeyDown KeyDown, style [ ( "width", "100%" ), ( "height", "100%" ) ] ]
-        [ Game.render
-            { time = 0
-            , camera = camera
-            , size = screen
-            }
-            (render model)
+    div []
+        [ Html.node "link" [ Html.Attributes.rel "stylesheet", Html.Attributes.href "style.css" ] []
+        , div [ tabindex, onKeyDown KeyDown, style [ ( "width", "100%" ), ( "height", "100%" ) ] ]
+            [ Game.render
+                { time = 0
+                , camera = camera
+                , size = screen
+                }
+                (render model)
+            ]
         ]
 
 
@@ -377,35 +415,35 @@ handleInput c =
     case c of
         -- up arrow
         38 ->
-            changeDir <| up
+            changeDir up
 
         -- w key
         87 ->
-            changeDir <| up
+            changeDir up
 
         -- left arrow
         37 ->
-            changeDir <| left
+            changeDir left
 
         -- a key
         65 ->
-            changeDir <| left
+            changeDir left
 
         -- down arrow
         40 ->
-            changeDir <| down
+            changeDir down
 
         -- s key
         83 ->
-            changeDir <| down
+            changeDir down
 
         -- right arrow
         39 ->
-            changeDir <| right
+            changeDir right
 
         -- d key
         68 ->
-            changeDir <| right
+            changeDir right
 
         -- r key
         82 ->
