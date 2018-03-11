@@ -6,48 +6,48 @@ type Point
 
 
 asTuple : Point -> ( Int, Int )
-asTuple (Point y x) =
-    ( y, x )
+asTuple (Point x y) =
+    ( x, y )
 
 
 add : Point -> Point -> Point
-add (Point y1 x1) (Point y2 x2) =
-    Point (y1 + y2) (x1 + x2)
+add (Point x1 y1) (Point x2 y2) =
+    Point (x1 + x2) (y1 + y2)
 
 
 getX : Point -> Int
-getX (Point _ x) =
+getX (Point x _) =
     x
 
 
 getY : Point -> Int
-getY (Point y _) =
+getY (Point _ y) =
     y
 
 
 getAngle : Point -> Point -> Float
-getAngle (Point y1 x1) (Point y2 x2) =
-    atan2 (toFloat (x1 * y2 - y1 * x2)) (toFloat (x1 * x2 + y1 * y2))
+getAngle (Point x1 y1) (Point x2 y2) =
+    atan2 (toFloat (x1 * y2 - x2 * y1)) (toFloat (y1 * y2 + x1 * x2))
 
 
 up : Point
 up =
-    Point 1 0
+    Point 0 1
 
 
 down : Point
 down =
-    Point -1 0
+    Point 0 -1
 
 
 left : Point
 left =
-    Point 0 -1
+    Point -1 0
 
 
 right : Point
 right =
-    Point 0 1
+    Point 1 0
 
 
 origin : Point
@@ -56,7 +56,7 @@ origin =
 
 
 inRange : Point -> Int -> Int -> Bool
-inRange (Point y x) my mx =
+inRange (Point x y) mx my =
     y
         < my
         && y
