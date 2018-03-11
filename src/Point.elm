@@ -5,6 +5,11 @@ type Point
     = Point Int Int
 
 
+asTuple : Point -> ( Int, Int )
+asTuple (Point y x) =
+    ( y, x )
+
+
 add : Point -> Point -> Point
 add (Point y1 x1) (Point y2 x2) =
     Point (y1 + y2) (x1 + x2)

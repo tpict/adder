@@ -1,6 +1,5 @@
 module Snake exposing (..)
 
-import Debug exposing (..)
 import Game.Resources as Resources exposing (Resources)
 import Game.TwoD as Game
 import Game.TwoD.Camera as Camera exposing (Camera)
@@ -13,6 +12,8 @@ import Maybe exposing (Maybe)
 import Point exposing (..)
 import Process
 import Random exposing (..)
+import Set exposing (fromList, size)
+import String exposing (toList, fromChar)
 import Task
 import Time exposing (second)
 import WebGL.Texture as Texture exposing (Texture)
@@ -28,17 +29,21 @@ xMax =
     16
 
 
-initLen : Int
-initLen =
-    3
-
-
 type alias SnakePart =
     { pos : Point, dir : Point, pdir : Point }
 
 
 type alias Snake =
     ( SnakePart, List SnakePart, SnakePart )
+
+
+score : Snake -> Int
+score snake =
+    positions snake
+        |> List.map (\p -> asTuple p)
+        |> Set.fromList
+        |> Set.size
+        |> (+) -3
 
 
 asList : Snake -> List SnakePart
@@ -140,7 +145,17 @@ loadResources : Cmd Msg
 loadResources =
     Cmd.map Resources
         (Resources.loadTextures
-            [ "images/bg-l-0.png"
+            [ "images/n0.png"
+            , "images/n1.png"
+            , "images/n2.png"
+            , "images/n3.png"
+            , "images/n4.png"
+            , "images/n5.png"
+            , "images/n6.png"
+            , "images/n7.png"
+            , "images/n8.png"
+            , "images/n9.png"
+            , "images/bg-l-0.png"
             , "images/bg-l-1.png"
             , "images/bg-l-2.png"
             , "images/bg-l-3.png"
@@ -161,23 +176,18 @@ loadResources =
             , "images/taildeadbend.png"
             , "images/title.png"
             , "images/gameover.png"
+            , "images/score.png"
             ]
         )
 
 
 init : ( Model, Cmd Msg )
 init =
-    let
-        model =
-            initModel
-    in
-        model ! [ loadResources, send CreateBackground, loop ]
-
-
-send : msg -> Cmd msg
-send msg =
-    Task.succeed msg
-        |> Task.perform identity
+    initModel
+        ! [ loadResources
+          , Task.succeed CreateBackground |> Task.perform identity
+          , loop
+          ]
 
 
 reset : Model -> ( Model, Cmd Msg )
@@ -189,7 +199,7 @@ reset ({ gameOver, resources, background } as model) =
 
 
 changeDir : Model -> Point -> ( Model, Cmd Msg )
-changeDir ({ snake } as state) newDir =
+changeDir ({ snake } as model) newDir =
     let
         ( h, _, _ ) =
             snake
@@ -198,9 +208,9 @@ changeDir ({ snake } as state) newDir =
             h.pdir
     in
         if add newDir lastDir == Point 0 0 then
-            state ! []
+            model ! []
         else
-            { state | dir = newDir, gameStarted = True } ! []
+            { model | dir = newDir, gameStarted = True } ! []
 
 
 getTileForCoords : Int -> Int -> Int -> Resources -> Maybe Texture
@@ -227,6 +237,9 @@ createBackground model l =
         coords =
             lift2 (\x y -> ( x, y )) (range 0 xMax) (range 0 yMax)
 
+        coordsWithRand =
+            LExtra.zip coords l
+
         background =
             \resources ->
                 List.map
@@ -240,38 +253,39 @@ createBackground model l =
                             , texture = getTileForCoords x y t resources
                             }
                     )
-                <|
-                    LExtra.zip coords l
+                    coordsWithRand
     in
         { model | background = background } ! []
 
 
 placeFood : Model -> Point -> ( Model, Cmd Msg )
-placeFood state p =
+placeFood model p =
     let
         inSnake =
-            member p <| positions state.snake
+            member p <| positions model.snake
     in
         if inSnake then
-            update PlaceFood state
+            update PlaceFood model
         else
-            ( { state | food = p }, Cmd.none )
+            ( { model | food = p }, Cmd.none )
 
 
 move : Model -> ( Model, Cmd Msg )
-move ({ snake, food, dir } as state) =
+move ({ snake, food, dir, gameOver, gameStarted } as model) =
     let
         ns =
             grow snake dir
     in
-        if collidedWith ns food then
-            update PlaceFood { state | snake = ns }
+        if gameOver || not gameStarted then
+            model ! []
+        else if collidedWith ns food then
+            update PlaceFood { model | snake = ns }
         else if collidedWithSelf ns then
-            ( { state | snake = ns, gameOver = True }, Cmd.none )
+            { model | snake = ns, gameOver = True } ! []
         else if not (headInRange ns) then
-            ( { state | gameOver = True }, Cmd.none )
+            { model | gameOver = True } ! []
         else
-            ( { state | snake = trim ns }, Cmd.none )
+            { model | snake = trim ns } ! []
 
 
 tickDur : Float
@@ -297,14 +311,11 @@ update msg model =
             ( model, Cmd.none )
 
         Move ->
-            if model.gameOver || not model.gameStarted then
-                ( model, loop )
-            else
-                let
-                    ( m, cb ) =
-                        move model
-                in
-                    m ! [ cb, loop ]
+            let
+                ( m, cb ) =
+                    move model
+            in
+                m ! [ cb, loop ]
 
         PlaceFood ->
             ( model
@@ -321,8 +332,8 @@ update msg model =
         CreateBackground ->
             ( model, Random.generate ActuallyCreateBackground (Random.list ((yMax + 1) * (xMax + 1)) (pair (Random.int 0 3) (Random.int 0 3))) )
 
-        ActuallyCreateBackground l ->
-            createBackground model l
+        ActuallyCreateBackground randList ->
+            createBackground model randList
 
         Resources msg ->
             { model | resources = Resources.update msg model.resources } ! []
@@ -439,6 +450,35 @@ renderGameOver { resources, gameOver } =
         []
 
 
+renderScore : Model -> List Renderable
+renderScore { snake, resources } =
+    let
+        scoreStr =
+            score snake |> toString |> toList
+
+        scoreLen =
+            List.length scoreStr
+
+        tname = \c -> "images/n" ++ (String.fromChar c) ++ ".png"
+    in
+        Render.sprite
+            { position = ( 0.0, toFloat yMax - 4 )
+            , size = ( 4.0, 4.0 )
+            , texture = Resources.getTexture "images/score.png" resources
+            }
+            :: (List.map
+                    (\( c, n ) ->
+                        Render.sprite
+                            { position = ( 3.25 + (toFloat n) * 0.5, toFloat yMax - 1 )
+                            , size = ( 1.0, 1.0 )
+                            , texture = Resources.getTexture (tname c) resources
+                            }
+                    )
+                <|
+                    LExtra.zip scoreStr (range 0 scoreLen)
+               )
+
+
 render : Model -> List Renderable
 render ({ gameStarted, gameOver, background, resources } as m) =
     let
@@ -449,6 +489,7 @@ render ({ gameStarted, gameOver, background, resources } as m) =
                 , renderHead
                 , renderFood
                 , renderGameOver
+                , renderScore
                 ]
             else
                 [ renderTitle ]
