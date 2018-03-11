@@ -19,14 +19,14 @@ import Time exposing (second)
 import WebGL.Texture as Texture exposing (Texture)
 
 
-yMax : Int
-yMax =
+gameSize : Int
+gameSize =
     16
 
 
-xMax : Int
-xMax =
-    16
+gameSizeF : Float
+gameSizeF =
+    toFloat gameSize
 
 
 type alias SnakePart =
@@ -53,7 +53,7 @@ asList ( h, b, t ) =
 
 headInRange : Snake -> Bool
 headInRange ( h, _, _ ) =
-    inRange h.pos yMax xMax
+    inRange h.pos gameSize gameSize
 
 
 positions : Snake -> List Point
@@ -112,16 +112,13 @@ type alias Model =
 initModel : Model
 initModel =
     let
-        initY =
-            yMax // 2
-
-        initX =
-            xMax // 2
+        c =
+            gameSize // 2
 
         snake =
-            ( { pos = Point initY initX, dir = right, pdir = right }
-            , [ { pos = Point initY (initX - 1), dir = right, pdir = right } ]
-            , { pos = Point initY (initX - 2), dir = right, pdir = right }
+            ( { pos = Point c c, dir = right, pdir = right }
+            , [ { pos = Point c (c - 1), dir = right, pdir = right } ]
+            , { pos = Point c (c - 2), dir = right, pdir = right }
             )
     in
         { keys = []
@@ -129,12 +126,12 @@ initModel =
         , gameOver = False
         , snake = snake
         , dir = left
-        , food = Point initY (initX + 3)
-        , screen = ( xMax * 32, yMax * 32 )
+        , food = Point c (c + 3)
+        , screen = ( gameSize * 32, gameSize * 32 )
         , camera =
-            Camera.fixedArea (toFloat (yMax * xMax))
-                ( (toFloat (xMax // 2))
-                , (toFloat (yMax // 2))
+            Camera.fixedArea (gameSizeF ^ 2)
+                ( gameSizeF / 2
+                , gameSizeF / 2
                 )
         , resources = Resources.init
         , background = \_ -> []
@@ -217,7 +214,7 @@ getTileForCoords : Int -> Int -> Int -> Resources -> Maybe Texture
 getTileForCoords x y t resources =
     let
         remainder =
-            rem (y * (xMax + 1) + x) 2
+            rem (y * (gameSize + 1) + x) 2
 
         prefix =
             if remainder == 0 then
@@ -235,7 +232,7 @@ createBackground : Model -> List ( Int, Int ) -> ( Model, Cmd Msg )
 createBackground model l =
     let
         coords =
-            lift2 (\x y -> ( x, y )) (range 0 xMax) (range 0 yMax)
+            lift2 (\x y -> ( x, y )) (range 0 gameSize) (range 0 gameSize)
 
         coordsWithRand =
             LExtra.zip coords l
@@ -321,8 +318,8 @@ update msg model =
             ( model
             , Random.generate UpdateFood
                 (Random.pair
-                    (Random.int 0 (xMax - 1))
-                    (Random.int 0 (yMax - 1))
+                    (Random.int 0 (gameSize - 1))
+                    (Random.int 0 (gameSize - 2))
                 )
             )
 
@@ -330,7 +327,11 @@ update msg model =
             placeFood model <| Point y x
 
         CreateBackground ->
-            ( model, Random.generate ActuallyCreateBackground (Random.list ((yMax + 1) * (xMax + 1)) (pair (Random.int 0 3) (Random.int 0 3))) )
+            ( model
+            , pair (Random.int 0 3) (Random.int 0 3)
+                |> Random.list ((gameSize + 1) ^ 2)
+                |> Random.generate ActuallyCreateBackground
+            )
 
         ActuallyCreateBackground randList ->
             createBackground model randList
@@ -431,7 +432,7 @@ renderTitle : Model -> List Renderable
 renderTitle { resources } =
     Render.sprite
         { position = ( 0.0, 0.0 )
-        , size = ( toFloat yMax, toFloat xMax )
+        , size = ( gameSizeF, gameSizeF )
         , texture = Resources.getTexture "images/title.png" resources
         }
         :: []
@@ -442,7 +443,7 @@ renderGameOver { resources, gameOver } =
     if gameOver then
         Render.sprite
             { position = ( 0.0, 0.0 )
-            , size = ( toFloat yMax, toFloat xMax )
+            , size = ( gameSizeF, gameSizeF )
             , texture = Resources.getTexture "images/gameover.png" resources
             }
             :: []
@@ -459,17 +460,18 @@ renderScore { snake, resources } =
         scoreLen =
             List.length scoreStr
 
-        tname = \c -> "images/n" ++ (String.fromChar c) ++ ".png"
+        tname =
+            \c -> "images/n" ++ (String.fromChar c) ++ ".png"
     in
         Render.sprite
-            { position = ( 0.0, toFloat yMax - 4 )
+            { position = ( 0.0, gameSizeF - 4.0 )
             , size = ( 4.0, 4.0 )
             , texture = Resources.getTexture "images/score.png" resources
             }
             :: (List.map
                     (\( c, n ) ->
                         Render.sprite
-                            { position = ( 3.25 + (toFloat n) * 0.5, toFloat yMax - 1 )
+                            { position = ( 3.25 + (toFloat n) * 0.5, gameSizeF - 1 )
                             , size = ( 1.0, 1.0 )
                             , texture = Resources.getTexture (tname c) resources
                             }
