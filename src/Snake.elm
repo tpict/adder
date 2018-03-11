@@ -427,31 +427,28 @@ renderTitle { resources } =
 
 
 renderGameOver : Model -> List Renderable
-renderGameOver { resources } =
-    Render.sprite
-        { position = ( 0.0, 0.0 )
-        , size = ( toFloat yMax, toFloat xMax )
-        , texture = Resources.getTexture "images/gameover.png" resources
-        }
-        :: []
+renderGameOver { resources, gameOver } =
+    if gameOver then
+        Render.sprite
+            { position = ( 0.0, 0.0 )
+            , size = ( toFloat yMax, toFloat xMax )
+            , texture = Resources.getTexture "images/gameover.png" resources
+            }
+            :: []
+    else
+        []
 
 
 render : Model -> List Renderable
 render ({ gameStarted, gameOver, background, resources } as m) =
     let
-        g =
-            if gameOver then
-                renderGameOver
-            else
-                \_ -> []
-
         r =
             if gameStarted then
                 [ renderSnake
                 , renderTail
                 , renderHead
                 , renderFood
-                , g
+                , renderGameOver
                 ]
             else
                 [ renderTitle ]
